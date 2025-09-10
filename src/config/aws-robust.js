@@ -14,19 +14,8 @@ const awsConfig = {
     }
 };
 
-<<<<<<< ours
 // Configure AWS SDK
 AWS.config.update(awsConfig);
-=======
-// Only attach explicit credentials if access key and secret are present
-if (raw.accessKeyId && raw.secretAccessKey) {
-    baseConfig.credentials = new AWS.Credentials({
-        accessKeyId: raw.accessKeyId,
-        secretAccessKey: raw.secretAccessKey,
-        ...(raw.sessionToken ? { sessionToken: raw.sessionToken } : {})
-    });
-}
->>>>>>> theirs
 
 // Add logging for credential loading
 const credentialsCallback = (err) => {

@@ -117,10 +117,9 @@ function createAWSClient(ClientClass, config = getAWSConfig()) {
     const client = new ClientClass(config);
 
     // Add detailed error logging
-    const originalSend = client.makeRequest;
+    const originalMakeRequest = client.makeRequest.bind(client);
     client.makeRequest = function(operation, params) {
-        const request = originalSend.call(this, operation, params);
-        
+        const request = originalMakeRequest(operation, params);
         request.on('error', (err) => {
             console.error(`❌ AWS ${ClientClass.name} Error:`.red, {
                 operation,
@@ -131,12 +130,6 @@ function createAWSClient(ClientClass, config = getAWSConfig()) {
                 time: new Date().toISOString()
             });
         });
-
-        return request;
-    };
-
-    return client;
-
         return request;
     };
 
