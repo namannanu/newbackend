@@ -65,12 +65,13 @@ const initializeDynamoDB = async () => {
         // Configure AWS SDK
         AWS.config.update(sdkConfig);
 
-        // Safe log of resolved AWS configuration
+        // Safe log of resolved AWS configuration (read from AWS.config to avoid scope issues)
+        const creds = AWS.config && AWS.config.credentials;
         console.log('AWS SDK configured:', {
-            region: sdkConfig.region,
-            accessKeyId: sdkConfig.accessKeyId ? `${sdkConfig.accessKeyId.slice(0,4)}...${sdkConfig.accessKeyId.slice(-4)}` : 'not set',
-            hasSecretKey: !!sdkConfig.secretAccessKey,
-            hasSessionToken: !!sdkConfig.sessionToken
+            region: (AWS.config && AWS.config.region) || valid.region,
+            accessKeyId: creds && creds.accessKeyId ? `${creds.accessKeyId.slice(0,4)}...${creds.accessKeyId.slice(-4)}` : 'not set',
+            hasSecretKey: !!(creds && creds.secretAccessKey),
+            hasSessionToken: !!(creds && creds.sessionToken)
         });
 
         // Initialize DynamoDB instances if not already initialized
