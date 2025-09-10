@@ -59,6 +59,8 @@ const corsOptions = {
 
 // Basic Middleware
 app.use(cors(corsOptions));
+// Explicitly handle preflight for all routes (esp. on serverless)
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(morgan('dev'));
@@ -102,6 +104,15 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Backward-compat: some clients call /api/health-check
+app.get('/api/health-check', (req, res) => {
+    res.status(200).json({
+        status: 'success',
+        message: 'API server is running',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Apply routes
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
@@ -111,6 +122,8 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/users', userRoutes);
+// Backward-compat: some clients call /api/user (singular)
+app.use('/api/user', userRoutes);
 app.use('/api/aws', awsDiagRoutes);
 
 // 404 handler
