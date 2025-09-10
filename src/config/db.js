@@ -46,14 +46,25 @@ const initializeDynamoDB = async () => {
         }
         
         // For production use with real AWS credentials
-        if (!process.env.AWS_REGION) {
-            console.warn('⚠️ AWS_REGION environment variable is not set, using default ap-south-1'.yellow);
-            process.env.AWS_REGION = 'ap-south-1'; // Default region
+        const region = process.env.AWS_REGION || 'ap-south-1';
+        const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+        const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+        if (!accessKeyId || !secretAccessKey) {
+            throw new Error('AWS credentials are required. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in environment variables.');
         }
 
-        // Configure AWS SDK
+        console.log('🔄 Configuring AWS SDK with provided credentials...'.yellow);
+        console.log(`Region: ${region}`);
+        console.log(`Access Key ID: ${accessKeyId.substring(0, 5)}...`);
+
+        // Configure AWS SDK with explicit credentials
         AWS.config.update({
-            region: process.env.AWS_REGION,
+            region: region,
+            credentials: new AWS.Credentials({
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey
+            }),
             maxRetries: 3,
             httpOptions: {
                 timeout: 5000,
@@ -316,11 +327,32 @@ function createMockDocumentClient() {
 // Test DynamoDB connection
 const testConnection = async () => {
     try {
-        await dynamoDB.listTables().promise();
+        console.log('🔄 Testing DynamoDB connection...'.yellow);
+        
+        // First, check if credentials are properly set
+        const sts = new AWS.STS();
+        const identity = await sts.getCallerIdentity().promise();
+        console.log(`✅ AWS Identity confirmed: ${identity.Arn}`.green);
+        
+        // Then try to list tables
+        const tables = await dynamoDB.listTables().promise();
         console.log('✅ DynamoDB connection test successful'.green);
+        console.log(`📋 Found ${tables.TableNames.length} tables: ${tables.TableNames.join(', ')}`.cyan);
         return true;
     } catch (error) {
-        console.warn(`⚠️  DynamoDB connection test warning: ${error.message}`.yellow);
+        console.error('❌ DynamoDB connection test failed:'.red);
+        console.error(`Error type: ${error.code}`.red);
+        console.error(`Error message: ${error.message}`.red);
+        
+        if (error.code === 'CredentialsError' || error.code === 'InvalidClientTokenId') {
+            console.error(`
+⚠️  Common fixes for credential issues:
+1. Make sure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set in Vercel environment variables
+2. Ensure the IAM user has appropriate DynamoDB permissions
+3. Check if the credentials are active and not expired
+4. Verify the credentials are properly formatted (no extra spaces)`.yellow);
+        }
+        
         throw new Error(`DynamoDB connection test failed: ${error.message}`);
     }
 };
