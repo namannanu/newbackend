@@ -20,15 +20,41 @@ dotenv.config({
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// CORS Configuration for Vercel deployment
+// CORS Configuration for local dev + Vercel
+const devOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8080',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8080'
+];
+
+const prodOrigins = [];
+if (process.env.VERCEL_URL) {
+    // e.g. newbackend-self.vercel.app
+    prodOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+
+const allowedOrigins = [...devOrigins, ...prodOrigins];
+
 const corsOptions = {
-    origin: process.env.VERCEL_URL ? [
-        `https://${process.env.VERCEL_URL}`,
-        'https://*.vercel.app'
-    ] : '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    origin: (origin, callback) => {
+        // Allow non-browser/SSR requests with no origin
+        if (!origin) return callback(null, true);
+
+        // Allow exact matches or any *.vercel.app subdomain
+        const isAllowed =
+            allowedOrigins.includes(origin) ||
+            /^https:\/\/([a-z0-9-]+)\.vercel\.app$/i.test(origin);
+
+        if (isAllowed) return callback(null, true);
+        return callback(new Error(`Not allowed by CORS: ${origin}`));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true,
+    optionsSuccessStatus: 204
 };
 
 // Basic Middleware
