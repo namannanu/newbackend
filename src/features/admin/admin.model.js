@@ -1,6 +1,4 @@
-
-const AWS = require('aws-sdk');
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
+const { initializeDynamoDB } = require('../../config/config');
 const bcrypt = require('bcryptjs');
 
 const AdminUserModel = {
@@ -30,7 +28,8 @@ const AdminUserModel = {
         };
 
         try {
-            await dynamoDB.put(params).promise();
+            const { documentClient } = await initializeDynamoDB();
+            await documentClient.put(params).promise();
             return params.Item;
         } catch (error) {
             if (error.code === 'ConditionalCheckFailedException') {
@@ -49,7 +48,8 @@ const AdminUserModel = {
             }
         };
 
-        const result = await dynamoDB.get(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.get(params).promise();
         return result.Item;
     },
 
@@ -63,7 +63,8 @@ const AdminUserModel = {
             }
         };
 
-        const result = await dynamoDB.scan(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
         return result.Items[0];
     },
 
@@ -101,7 +102,8 @@ const AdminUserModel = {
             ReturnValues: 'ALL_NEW'
         };
 
-        const result = await dynamoDB.update(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.update(params).promise();
         return result.Attributes;
     },
 
@@ -114,7 +116,8 @@ const AdminUserModel = {
             }
         };
 
-        await dynamoDB.delete(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        await documentClient.delete(params).promise();
     },
 
     // Get all admin users
@@ -123,7 +126,8 @@ const AdminUserModel = {
             TableName: this.tableName
         };
 
-        const result = await dynamoDB.scan(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
         return result.Items;
     },
 
@@ -150,7 +154,8 @@ const AdminUserModel = {
             ReturnValues: 'ALL_NEW'
         };
 
-        const result = await dynamoDB.update(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.update(params).promise();
         return result.Attributes;
     }
 };

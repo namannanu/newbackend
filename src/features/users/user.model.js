@@ -1,6 +1,4 @@
-
-const AWS = require('aws-sdk');
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
+const { initializeDynamoDB } = require('../../config/config');
 
 const UserModel = {
     tableName: 'Users',
@@ -45,7 +43,8 @@ const UserModel = {
         };
 
         try {
-            await dynamoDB.put(params).promise();
+            const { documentClient } = await initializeDynamoDB();
+            await documentClient.put(params).promise();
             return params.Item;
         } catch (error) {
             if (error.code === 'ConditionalCheckFailedException') {
@@ -64,7 +63,8 @@ const UserModel = {
             }
         };
 
-        const result = await dynamoDB.get(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.get(params).promise();
         const user = result.Item;
         
         // If includeFaceId flag is true, add hasFaceImage property to the response
@@ -100,7 +100,8 @@ async getByEmail(email) {
         }
     };
 
-    const result = await dynamoDB.query(params).promise();
+    const { documentClient } = await initializeDynamoDB();
+    const result = await documentClient.query(params).promise();
     return result.Items[0]; // Return first matching user
 },
 
@@ -140,7 +141,8 @@ async getByEmail(email) {
             ReturnValues: 'ALL_NEW'
         };
 
-        const result = await dynamoDB.update(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.update(params).promise();
         return result.Attributes;
     },
 
@@ -153,7 +155,8 @@ async getByEmail(email) {
             }
         };
 
-        await dynamoDB.delete(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        await documentClient.delete(params).promise();
     },
 
     // List users with pagination
@@ -167,7 +170,8 @@ async getByEmail(email) {
             params.ExclusiveStartKey = lastEvaluatedKey;
         }
 
-        const result = await dynamoDB.scan(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
         return {
             items: result.Items,
             lastEvaluatedKey: result.LastEvaluatedKey
@@ -187,7 +191,8 @@ async getByEmail(email) {
             }
         };
 
-        const result = await dynamoDB.scan(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
         return result.Items;
     },
 
@@ -229,7 +234,8 @@ async getByEmail(email) {
         try {
             // Prefer using a GSI on UserId if available
             try {
-                const q = await dynamoDB.query({
+                const { documentClient } = await initializeDynamoDB();
+                const q = await documentClient.query({
                     TableName: this.faceImageTableName,
                     IndexName: 'UserId-index',
                     KeyConditionExpression: '#Uid = :uid',
@@ -249,7 +255,8 @@ async getByEmail(email) {
 
             // Fallback: scan for any item with this UserId
             try {
-                const scan = await dynamoDB.scan({
+                const { documentClient: dc2 } = await initializeDynamoDB();
+                const scan = await dc2.scan({
                     TableName: this.faceImageTableName,
                     FilterExpression: '#Uid = :uid',
                     ExpressionAttributeNames: { '#Uid': 'UserId' },
@@ -280,7 +287,8 @@ async getByEmail(email) {
             // Try GSI on UserId first (more efficient)
             try {
                 console.log(`Querying faceimage table with UserId-index GSI for user ${userId}`);
-                const q = await dynamoDB.query({
+                const { documentClient } = await initializeDynamoDB();
+                const q = await documentClient.query({
                     TableName: this.faceImageTableName,
                     IndexName: 'UserId-index',
                     KeyConditionExpression: '#Uid = :uid',
@@ -298,7 +306,8 @@ async getByEmail(email) {
                 console.warn(`GSI query failed for user ${userId}, falling back to scan: ${gsiErr.message}`);
                 
                 // Fallback to scan (less efficient but more reliable)
-                const scan = await dynamoDB.scan({
+                const { documentClient: dc3 } = await initializeDynamoDB();
+                const scan = await dc3.scan({
                     TableName: this.faceImageTableName,
                     FilterExpression: '#Uid = :uid',
                     ExpressionAttributeNames: { '#Uid': 'UserId' },

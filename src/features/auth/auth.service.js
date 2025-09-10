@@ -2,8 +2,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { promisify } = require('util');
-const AWS = require('aws-sdk');
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
+const { initializeDynamoDB } = require('../../config/config');
 const User = require('../users/user.model');
 const Admin = require('../admin/admin.model');
 const AppError = require('../../shared/utils/appError');
@@ -153,7 +152,8 @@ const login = async (email, password, isAdminLogin = false) => {
       };
     
       console.log('Searching for admin with email:', email);
-      const result = await dynamoDB.scan(params).promise();
+      const { documentClient } = await initializeDynamoDB();
+      const result = await documentClient.scan(params).promise();
       console.log('Scan result:', JSON.stringify(result, null, 2));
       user = result.Items[0];
       
@@ -186,7 +186,8 @@ const login = async (email, password, isAdminLogin = false) => {
     // 4) Update last login
     const timestamp = new Date().toISOString();
     if (isAdminLogin) {
-      await dynamoDB.update({
+      const { documentClient } = await initializeDynamoDB();
+      await documentClient.update({
         TableName: 'AdminUsers',
         Key: { userId: user.userId },
         UpdateExpression: 'SET lastLogin = :timestamp, lastActivity = :timestamp',
@@ -213,7 +214,8 @@ const login = async (email, password, isAdminLogin = false) => {
 const updateLastLogin = async (userId, isAdmin = false) => {
   const timestamp = new Date().toISOString();
   if (isAdmin) {
-    await dynamoDB.update({
+    const { documentClient } = await initializeDynamoDB();
+    await documentClient.update({
       TableName: 'AdminUsers',
       Key: { userId },
       UpdateExpression: 'SET lastLogin = :timestamp, lastActivity = :timestamp',
