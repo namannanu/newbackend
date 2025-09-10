@@ -1,4 +1,4 @@
-const { initializeDynamoDB } = require('../config/config');
+const { initializeDynamoDB } = require('../../config/config');
 
 /**
  * Middleware to attach DynamoDB instances to the request object
