@@ -254,7 +254,17 @@ const protect = catchAsync(async (req, res, next) => {
   }
 
   // 2) Verification token
-  const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+  if (!process.env.JWT_SECRET) {
+    console.error('JWT secret is not configured');
+    return next(new AppError('Authentication service misconfigured', 500));
+  }
+  let decoded;
+  try {
+    decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+  } catch (e) {
+    console.error('JWT verification failed:', e.message);
+    return next(new AppError('Invalid or expired token', 401));
+  }
   
   console.log(`🔍 Auth Debug: Decoded token:`, { 
     userId: decoded.userId,
