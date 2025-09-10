@@ -4,14 +4,7 @@ const User = require('../users/user.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
 
-// Initialize the DynamoDB table when the module is loaded
-(async () => {
-  try {
-    await Ticket.initTable();
-  } catch (error) {
-    console.error('Error initializing EventTickets table:', error);
-  }
-})();
+// Table initialization is now controlled elsewhere to avoid startup failures on invalid AWS creds
 
 exports.getAllTickets = catchAsync(async (req, res, next) => {
   // Get all tickets

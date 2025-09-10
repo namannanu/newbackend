@@ -1,6 +1,4 @@
-const AWS = require('aws-sdk');
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
-const dynamoDBRaw = new AWS.DynamoDB();
+const { initializeDynamoDB } = require('../../config/config');
 
 const FeedbackModel = {
     tableName: 'EventFeedback',
@@ -8,6 +6,7 @@ const FeedbackModel = {
     // Initialize table if it doesn't exist
     async initTable() {
         try {
+            const { dynamoDB: dynamoDBRaw } = await initializeDynamoDB();
             await dynamoDBRaw.describeTable({ TableName: this.tableName }).promise();
             console.log(`Table ${this.tableName} already exists`);
         } catch (error) {
@@ -101,7 +100,8 @@ const FeedbackModel = {
             }
         };
 
-        await dynamoDB.put(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        await documentClient.put(params).promise();
         return params.Item;
     },
 
@@ -113,7 +113,8 @@ const FeedbackModel = {
             }
         };
 
-        const result = await dynamoDB.get(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.get(params).promise();
         return result.Item;
     },
 
@@ -127,7 +128,8 @@ const FeedbackModel = {
             }
         };
 
-        const result = await dynamoDB.query(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.query(params).promise();
         return result.Items;
     },
 
@@ -141,7 +143,8 @@ const FeedbackModel = {
             }
         };
 
-        const result = await dynamoDB.query(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.query(params).promise();
         return result.Items;
     },
 
@@ -172,7 +175,8 @@ const FeedbackModel = {
             ReturnValues: 'ALL_NEW'
         };
 
-        const result = await dynamoDB.update(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.update(params).promise();
         return result.Attributes;
     },
 
@@ -184,7 +188,8 @@ const FeedbackModel = {
             }
         };
 
-        await dynamoDB.delete(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        await documentClient.delete(params).promise();
     }
 };
 

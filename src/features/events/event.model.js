@@ -1,6 +1,4 @@
-const AWS = require('aws-sdk');
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
-const dynamoDBRaw = new AWS.DynamoDB();
+const { initializeDynamoDB } = require('../../config/config');
 
 const EventModel = {
     tableName: 'Events',
@@ -8,6 +6,7 @@ const EventModel = {
     // Initialize table if it doesn't exist
     async initTable() {
         try {
+            const { dynamoDB: dynamoDBRaw } = await initializeDynamoDB();
             await dynamoDBRaw.describeTable({ TableName: this.tableName }).promise();
             console.log(`Table ${this.tableName} already exists`);
         } catch (error) {
@@ -122,7 +121,8 @@ const EventModel = {
         console.log('DynamoDB put params:', JSON.stringify(params, null, 2));
         
         try {
-            await dynamoDB.put(params).promise();
+            const { documentClient } = await initializeDynamoDB();
+            await documentClient.put(params).promise();
             console.log('Event created successfully with ID:', eventId);
             return params.Item;
         } catch (error) {
@@ -130,7 +130,8 @@ const EventModel = {
             throw error;
         }
 
-        await dynamoDB.put(params).promise();
+        const { documentClient: dc2 } = await initializeDynamoDB();
+        await dc2.put(params).promise();
         return params.Item;
     },
 
@@ -143,7 +144,8 @@ const EventModel = {
             }
         };
 
-        const result = await dynamoDB.get(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.get(params).promise();
         return result.Item;
     },
 
@@ -175,7 +177,8 @@ const EventModel = {
             ReturnValues: 'ALL_NEW'
         };
 
-        const result = await dynamoDB.update(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.update(params).promise();
         return result.Attributes;
     },
 
@@ -188,7 +191,8 @@ const EventModel = {
             }
         };
 
-        await dynamoDB.delete(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        await documentClient.delete(params).promise();
     },
 
     // Query events by status and date range
@@ -216,7 +220,8 @@ const EventModel = {
         };
 
         console.log('Using query with params:', JSON.stringify(params, null, 2));
-        const result = await dynamoDB.query(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.query(params).promise();
         console.log(`Query returned ${result.Items ? result.Items.length : 0} events`);
         return result.Items;
     } catch (error) {
@@ -250,7 +255,8 @@ const EventModel = {
         }
         
         console.log('Using scan with params:', JSON.stringify(params, null, 2));
-        const result = await dynamoDB.scan(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
         console.log(`Scan returned ${result.Items ? result.Items.length : 0} events`);
         return result.Items;
     },
@@ -285,7 +291,8 @@ const EventModel = {
             };
         }
 
-    const result = await dynamoDB.scan(params).promise();
+    const { documentClient } = await initializeDynamoDB();
+    const result = await documentClient.scan(params).promise();
     return result.Items;
     },
 
@@ -300,7 +307,8 @@ const EventModel = {
             }
         };
 
-        const result = await dynamoDB.query(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.query(params).promise();
         return result.Items;
     },
 

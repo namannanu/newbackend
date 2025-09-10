@@ -3,14 +3,7 @@ const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
 const BusinessRulesService = require('../../shared/services/businessRules.service');
 
-// Initialize the DynamoDB table when the module is loaded
-(async () => {
-  try {
-    await UserEventRegistration.initTable();
-  } catch (error) {
-    console.error('Error initializing EventUserRegistrations table:', error);
-  }
-})();
+// Table initialization is disabled at module load to avoid startup failures on invalid AWS creds
 
 exports.getAllRegistrations = catchAsync(async (req, res, next) => {
   // Use DynamoDB scan instead of MongoDB find

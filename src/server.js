@@ -55,6 +55,7 @@ const adminRoutes = require('./features/admin/admin.routes');
 const registrationRoutes = require('./features/registrations/userEventRegistration.routes');
 const userRoutes = require('./features/users/user.routes');
 const authRoutes = require('./features/auth/auth.routes');
+const awsDiagRoutes = require('./features/aws/routes/diag.routes');
 
 // Root route - Vercel status
 app.get('/', (req, res) => {
@@ -84,6 +85,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/aws', awsDiagRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

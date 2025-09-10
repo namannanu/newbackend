@@ -1,6 +1,4 @@
-const AWS = require('aws-sdk');
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
-const dynamoDBRaw = new AWS.DynamoDB();
+const { initializeDynamoDB } = require('../../config/config');
 
 const UserEventRegistrationModel = {
     tableName: 'EventUserRegistrations',
@@ -8,6 +6,7 @@ const UserEventRegistrationModel = {
     // Initialize table if it doesn't exist
     async initTable() {
         try {
+            const { dynamoDB: dynamoDBRaw } = await initializeDynamoDB();
             await dynamoDBRaw.describeTable({ TableName: this.tableName }).promise();
             console.log(`Table ${this.tableName} already exists`);
         } catch (error) {
@@ -128,7 +127,8 @@ const UserEventRegistrationModel = {
     };
 
     try {
-        await dynamoDB.put(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        await documentClient.put(params).promise();
         return params.Item;
     } catch (error) {
         console.error('Error creating registration:', error);
@@ -147,7 +147,8 @@ const UserEventRegistrationModel = {
             }
         };
 
-        const result = await dynamoDB.query(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.query(params).promise();
         return result.Items;
     },
 
@@ -162,7 +163,8 @@ const UserEventRegistrationModel = {
             }
         };
 
-        const result = await dynamoDB.query(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.query(params).promise();
         return result.Items;
     },
 
@@ -192,7 +194,8 @@ const UserEventRegistrationModel = {
             params.ExpressionAttributeValues[':faceStatus'] = faceVerificationStatus;
         }
 
-        const result = await dynamoDB.update(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.update(params).promise();
         return result.Attributes;
     },
 
@@ -214,7 +217,8 @@ const UserEventRegistrationModel = {
             ReturnValues: 'ALL_NEW'
         };
 
-        const result = await dynamoDB.update(params).promise();
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.update(params).promise();
         return result.Attributes;
     },
 

@@ -3,16 +3,7 @@ const AppError = require('../../shared/utils/appError');
 const Feedback = require('./feedback.model');
 const User = require('../auth/auth.model');
 const Event = require('../events/event.model');
-const AWS = require('aws-sdk');
-
-// Initialize the DynamoDB table when the module is loaded
-(async () => {
-  try {
-    await Feedback.initTable();
-  } catch (error) {
-    console.error('Error initializing EventFeedback table:', error);
-  }
-})();
+const { initializeDynamoDB } = require('../../config/config');
 
 exports.getAllFeedback = catchAsync(async (req, res, next) => {
   // Get all feedback items from DynamoDB
@@ -21,8 +12,8 @@ exports.getAllFeedback = catchAsync(async (req, res, next) => {
     TableName: Feedback.tableName
   };
   
-  const dynamoDB = new AWS.DynamoDB.DocumentClient();
-  const result = await dynamoDB.scan(params).promise();
+  const { documentClient } = await initializeDynamoDB();
+  const result = await documentClient.scan(params).promise();
   const feedback = result.Items || [];
 
   res.status(200).json({

@@ -59,11 +59,12 @@ const initializeDynamoDB = async () => {
         const valid = AWSConfigValidator.validateCredentials(envConfig);
 
         // Build final AWS SDK config; only include sessionToken if present
+        const useSession = !!(valid.sessionToken && String(valid.accessKeyId || '').startsWith('ASIA'));
         const sdkConfig = {
             accessKeyId: valid.accessKeyId,
             secretAccessKey: valid.secretAccessKey,
             region: valid.region,
-            ...(valid.sessionToken ? { sessionToken: valid.sessionToken } : {})
+            ...(useSession ? { sessionToken: valid.sessionToken } : {})
         };
 
         // Configure AWS SDK

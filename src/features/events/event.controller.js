@@ -2,17 +2,7 @@ const Event = require('./event.model');
 const Organizer = require('../organizers/organizer.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
-const AWS = require('aws-sdk');
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
-
-// Initialize the DynamoDB table when the module is loaded
-(async () => {
-  try {
-    await Event.initTable();
-  } catch (error) {
-    console.error('Error initializing Events table:', error);
-  }
-})();
+const { initializeDynamoDB } = require('../../config/config');
 
 exports.getAllEvents = catchAsync(async (req, res, next) => {
   console.log('📢 GET /api/events endpoint hit - fetching all events');
@@ -24,7 +14,8 @@ exports.getAllEvents = catchAsync(async (req, res, next) => {
     };
     
     console.log('🔍 Scanning events table with params:', JSON.stringify(params));
-    const result = await dynamoDB.scan(params).promise();
+    const { documentClient } = await initializeDynamoDB();
+    const result = await documentClient.scan(params).promise();
     const events = result.Items || [];
     
     console.log(`📊 Found ${events.length} events in database`);
@@ -33,6 +24,7 @@ exports.getAllEvents = catchAsync(async (req, res, next) => {
       console.log('⚠️ No events found - checking table metadata');
       
       try {
+        const { dynamoDB: dynamoDBRaw } = await initializeDynamoDB();
         const tableInfo = await dynamoDBRaw.describeTable({ TableName: Event.tableName }).promise();
         console.log(`ℹ️ Table info:`, JSON.stringify({
           status: tableInfo.Table.TableStatus,
