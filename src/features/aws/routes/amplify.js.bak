@@ -1,0 +1,1000 @@
+const express = require("express");
+const multer = require("multer");
+const { S3Client, PutObjectCommand, DeleteObjectCommand, ListBucketsCommand } = require("@aws-sdk/client-s3");
+const { fromNodeProviderChain } = require("@aws-sdk/credential-providers");
+const AWS = require('aws-sdk');
+const jwt = require('jsonwebtoken');
+const User = require('../../users/user.model');
+
+// Import S3 signed URL service
+const { getSignedImageUrl, checkObjectExists, getMultipleSignedUrls } = require('../s3-signed-url.service');
+
+const router = express.Router();
+
+// In-memory storage for user uploads
+const userUploads = new Map();
+
+// Debug: indicate router load
+console.log('[Amplify] Router module loaded.');
+
+// Simple ping to verify base mount (/api)
+router.get('/s3/test-ping', (req, res) => {
+  res.status(200).json({ success: true, message: 'Amplify router alive', timestamp: new Date().toISOString() });
+});
+
+// List registered routes on this router (debug)
+router.get('/s3/_debug/routes', (req, res) => {
+  try {
+    const routes = (router.stack || [])
+      .filter((l) => l.route)
+      .map((l) => ({ methods: Object.keys(l.route.methods), path: l.route.path }));
+    res.status(200).json({ success: true, count: routes.length, routes });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Failed to enumerate routes', error: e.message });
+  }
+});
+
+
+// JWT Secret from environment variables
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Middleware to verify JWT token
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+        return res.status(401).json({ 
+            success: false, 
+            message: 'Access token is required' 
+        });
+    }
+
+    try {
+        console.log(`Verifying token: ${token.substring(0, 10)}...`);
+        const decoded = jwt.verify(token, JWT_SECRET);
+        console.log('Token decoded:', {
+            userId: decoded.userId,
+            role: decoded.role || 'not specified',
+            iat: decoded.iat,
+            exp: decoded.exp
+        });
+        req.user = decoded;
+        next();
+    } catch (error) {
+        console.error(`Token verification failed: ${error.message}`);
+        return res.status(403).json({ 
+            success: false, 
+            message: 'Invalid or expired token',
+            error: error.message 
+        });
+    }
+};
+
+// Initialize S3 client with IAM Role credentials
+let s3;
+let s3Available = false;
+
+try {
+    const awsConfig = {
+        region: process.env.AWS_REGION || "ap-south-1",
+        credentials: fromNodeProviderChain()
+    };
+
+    s3 = new S3Client(awsConfig);
+    s3Available = true;
+} catch (s3Error) {
+    console.error("[ERROR] S3 client initialization failed:", s3Error.message);
+    s3Available = false;
+}
+
+// Configure multer
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === "image/jpeg" || file.mimetype === "image/png" || file.mimetype === "image/jpg") {
+            cb(null, true);
+        } else {
+            cb(new Error("Invalid file type. Only JPEG, JPG and PNG are allowed."), false);
+        }
+    }
+});
+
+// Helper: small delay
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+
+
+// Upload Image Route
+router.post("/upload", verifyToken, upload.single("image"), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, msg: "No file uploaded" });
+        }
+
+        const userId = req.user.userId;
+        const fullname = req.body.fullname || req.body.FullName || "default_filename";
+        
+        const sanitizedFullname = fullname.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `${userId}_${sanitizedFullname}`;
+        // Optional RekognitionId from client. If not provided, we will NOT upsert faceimage here.
+        const RekognitionId = (req.body.rekognitionId || req.body.RekognitionId || null);
+
+        // Verify user exists first using the correct DynamoDB method
+        const user = await User.get(userId);
+        if (!user) {
+            console.log("[DEBUG] User not found for userId:", userId);
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        // Check for existing upload
+        if (userUploads.has(userId)) {
+            const existingUpload = userUploads.get(userId);
+            return res.status(409).json({
+                success: false, 
+                message: "You have already uploaded an image. Delete existing first.",
+                existingUpload: {
+                    filename: existingUpload.filename,
+                    uploadedAt: existingUpload.uploadedAt,
+                    fileUrl: existingUpload.fileUrl
+                }
+            });
+        }
+
+        if (!s3Available) {
+            return res.status(503).json({ 
+                success: false, 
+                message: "S3 service unavailable" 
+            });
+        }
+
+        // Upload to S3
+        const params = {
+            Bucket: "nfacialimagescollections",
+            Key: `public/${filename}`,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype,
+            Metadata: { 
+                // Use lowercase 'userid' because S3 returns metadata keys in lowercase,
+                // and the Lambda reads ret['Metadata']['userid']
+                userid: userId,
+                uploadedAt: timestamp,
+                fullname: fullname
+            }
+        };
+
+        // Upload privately (no ACL); access via presigned URLs
+        await s3.send(new PutObjectCommand(params));
+        const fileUrl = `https://nfacialimagescollections.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/public/${filename}`;
+
+        // Update user's uploadedPhoto field using userId as a string
+        // Use separate update calls to avoid the document paths overlapping error
+        try {
+            // First update the uploadedPhoto field
+            const photoUpdate = await User.update(userId, { 
+                uploadedPhoto: fileUrl
+            });
+
+            if (!photoUpdate) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to update user photo record"
+                });
+            }
+
+            // Do not make a second update call for updatedAt; the model sets it
+
+            // If RekognitionId is provided, attach UserId and FullName to that faceimage item
+            if (RekognitionId) {
+                try {
+                    const dynamoDB = new AWS.DynamoDB.DocumentClient();
+                    await dynamoDB.update({
+                        TableName: 'faceimage',
+                        Key: { RekognitionId },
+                        UpdateExpression: 'SET #Uid = :uid, #full = :full',
+                        ExpressionAttributeNames: {
+                            '#Uid': 'UserId',
+                            '#full': 'FullName'
+                        },
+                        ExpressionAttributeValues: {
+                            ':uid': userId,
+                            ':full': fullname
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }).promise();
+                    console.log(`Attached UserId to faceimage ${RekognitionId}`);
+                } catch (faceError) {
+                    // Log but continue - this shouldn't fail the whole upload
+                    console.error(`Error updating faceimage (attach on upload): ${faceError.message}`);
+                }
+            }
+            
+            // Get the updated user record to return
+            const updatedUser = await User.get(userId);
+            
+            if (!updatedUser) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to retrieve updated user record"
+                });
+            }
+        } catch (updateError) {
+            console.error("Error updating user record:", updateError);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to update user record",
+                error: updateError.message
+            });
+        }
+
+        // Store upload info in memory
+        const uploadData = {
+            filename,
+            originalName: req.file.originalname,
+            size: req.file.size,
+            sizeMB: Math.round(req.file.size / (1024 * 1024) * 100) / 100,
+            mimetype: req.file.mimetype,
+            uploadedBy: sanitizedFullname,
+            originalFullname: fullname,
+            userId: userId,
+            uploadedAt: timestamp,
+            storage: "aws_s3",
+            fileUrl: fileUrl,
+            s3Key: `public/${filename}`
+        };
+        userUploads.set(userId, uploadData);
+
+        // Read latest user record for response
+        const updatedUser = await User.get(userId);
+        if (!updatedUser) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to retrieve updated user record"
+            });
+        }
+
+        // Return success response
+        return res.status(200).json({
+            success: true,
+            fileUrl,
+            storage: "aws_s3",
+            message: "File uploaded to S3 successfully",
+            uploadInfo: {
+                filename,
+                originalName: req.file.originalname,
+                size: req.file.size,
+                sizeMB: uploadData.sizeMB,
+                uploadedBy: sanitizedFullname,
+                userId: userId,
+                uploadedAt: timestamp
+            },
+            user: {
+                userId: updatedUser.userId,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                uploadedPhoto: updatedUser.uploadedPhoto,
+                verificationStatus: updatedUser.verificationStatus,
+                updatedAt: updatedUser.updatedAt
+            },
+            fileInfo: uploadData
+        });
+
+    } catch (error) {
+        console.error("[ERROR] Upload Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Upload failed",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// Delete Image Route
+router.delete("/delete", verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Check if user has an uploaded image
+        if (!userUploads.has(userId)) {
+            return res.status(404).json({
+                success: false,
+                message: "No image found for this user"
+            });
+        }
+
+        // Get upload info
+        const uploadInfo = userUploads.get(userId);
+
+        // Delete from S3
+        if (s3Available) {
+            const deleteParams = {
+                Bucket: "nfacialimagescollections",
+                Key: uploadInfo.s3Key
+            };
+
+            try {
+                await s3.send(new DeleteObjectCommand(deleteParams));
+            } catch (s3Error) {
+                console.error("[ERROR] S3 Delete Failed:", s3Error);
+                // We'll still proceed with removing the record even if S3 delete fails
+            }
+        }
+
+        // Update user record
+        const updatedUser = await User.update(userId, { 
+            uploadedPhoto: null,
+            updatedAt: new Date().toISOString()
+        });
+
+        if (!updatedUser) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to update user record"
+            });
+        }
+
+        // Remove from in-memory storage
+        const deletedFile = {...userUploads.get(userId)};
+        userUploads.delete(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Image deleted successfully and user record updated",
+            deletedFile,
+            user: {
+                userId: updatedUser.userId,
+                uploadedPhoto: updatedUser.uploadedPhoto,
+                updatedAt: updatedUser.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("[ERROR] Delete Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Delete failed",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// Retrieve My Upload
+router.get("/my-upload", verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // First check in-memory cache
+        if (userUploads.has(userId)) {
+            const uploadInfo = userUploads.get(userId);
+            return res.status(200).json({
+                success: true,
+                uploadInfo: uploadInfo,
+                message: "Upload information retrieved successfully"
+            });
+        }
+        
+        // If not in memory, check database
+        const userRecord = await User.get(userId);
+        
+        if (userRecord && userRecord.uploadedPhoto) {
+            const fileUrl = userRecord.uploadedPhoto;
+            const filename = fileUrl.split('/').pop();
+            
+            // Create a simplified uploadInfo object
+            const uploadInfo = {
+                filename: filename,
+                userId: userId,
+                fileUrl: fileUrl,
+                uploadedAt: userRecord.updatedAt,
+                storage: "aws_s3"
+            };
+            
+            // Store in memory for future requests
+            userUploads.set(userId, uploadInfo);
+            
+            return res.status(200).json({
+                success: true,
+                uploadInfo: uploadInfo,
+                message: "Upload information retrieved from database"
+            });
+        }
+        
+        // If not in memory, check database
+        const user = await User.findOne({ userId: userId });
+        
+        if (!user || !user.uploadedPhoto) {
+            return res.status(404).json({
+                success: false,
+                message: "No image found for this user"
+            });
+        }
+        
+        // Reconstruct upload info from database
+        const filename = user.uploadedPhoto.split('/').pop();
+        const timestamp = new Date(user.updatedAt).toISOString().replace(/[:.]/g, '-');
+        
+        // Create a minimal uploadInfo object from available data
+        const uploadInfo = {
+            filename: filename,
+            userId: userId,
+            uploadedAt: timestamp,
+            fileUrl: user.uploadedPhoto,
+            s3Key: `public/${filename}`
+        };
+        
+        // Store in memory for future requests
+        userUploads.set(userId, uploadInfo);
+        
+        return res.status(200).json({
+            success: true,
+            uploadInfo: uploadInfo,
+            message: "Upload information retrieved successfully"
+        });
+
+    } catch (error) {
+        console.error("[ERROR] Retrieving Upload Info Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve upload information",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// Retrieve image URL
+router.get("/retrieve-image", verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // First check in-memory cache
+        if (userUploads.has(userId)) {
+            const uploadInfo = userUploads.get(userId);
+            return res.status(200).json({
+                success: true,
+                fileUrl: uploadInfo.fileUrl,
+                filename: uploadInfo.filename,
+                storage: uploadInfo.storage || "aws_s3",
+                message: "S3 URL retrieved successfully"
+            });
+        }
+        
+        // If not in memory, check database
+        const user = await User.findOne({ userId: userId });
+        
+        if (!user || !user.uploadedPhoto) {
+            return res.status(404).json({
+                success: false,
+                message: "No image found for this user"
+            });
+        }
+        
+        // Get file information from URL
+        const fileUrl = user.uploadedPhoto;
+        const filename = fileUrl.split('/').pop();
+        
+        // Create minimal upload info and store in memory
+        const uploadInfo = {
+            filename,
+            userId,
+            fileUrl,
+            uploadedAt: new Date(user.updatedAt).toISOString(),
+            storage: "aws_s3",
+            s3Key: `public/${filename}`
+        };
+        userUploads.set(userId, uploadInfo);
+        
+        return res.status(200).json({
+            success: true,
+            fileUrl,
+            filename,
+            storage: "aws_s3",
+            message: "S3 URL retrieved successfully"
+        });
+
+    } catch (error) {
+        console.error("[ERROR] Retrieving Image URL Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve image URL",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// Get image status for a user
+router.get("/get-image-status/:userId", verifyToken, async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        
+        // Verify user has permission to access this data
+        if (req.user.userId !== userId && !req.user.isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to access this user's data"
+            });
+        }
+        
+        // First check in-memory cache
+        let hasUploadedImage = userUploads.has(userId);
+        let imageUrl = null;
+        let uploadInfo = null;
+        
+        if (hasUploadedImage) {
+            uploadInfo = userUploads.get(userId);
+            imageUrl = uploadInfo.fileUrl;
+        } else {
+            // Check database
+            const user = await User.findOne({ userId: userId });
+            
+            if (user && user.uploadedPhoto) {
+                hasUploadedImage = true;
+                imageUrl = user.uploadedPhoto;
+                
+                // Reconstruct and cache upload info
+                const filename = imageUrl.split('/').pop();
+                uploadInfo = {
+                    filename,
+                    userId,
+                    uploadedAt: new Date(user.updatedAt).toISOString(),
+                    fileUrl: imageUrl,
+                    storage: "aws_s3",
+                    s3Key: `public/${filename}`
+                };
+                userUploads.set(userId, uploadInfo);
+            }
+        }
+        
+        return res.status(200).json({
+            success: true,
+            hasUploadedImage,
+            message: hasUploadedImage ? 
+                "User has an uploaded image" : 
+                "User has not uploaded an image",
+            ...(hasUploadedImage && { imageUrl, uploadInfo })
+        });
+        
+    } catch (error) {
+        console.error("[ERROR] Getting Image Status Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to get image status",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// Get a signed URL for my image
+router.get("/my-signed-url", verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const expiresIn = parseInt(req.query.expires) || 1; // Default 1 hour if not specified
+
+        // Try in-memory first
+        let uploadInfo = userUploads.get(userId);
+
+        // Fallback to Users table if not in memory
+        if (!uploadInfo) {
+            const userRecord = await User.get(userId);
+            if (!userRecord || !userRecord.uploadedPhoto) {
+                return res.status(404).json({
+                    success: false,
+                    message: "No image found for this user"
+                });
+            }
+            // Derive key from stored URL
+            const url = new URL(userRecord.uploadedPhoto);
+            const key = url.pathname.replace(/^\//, '');
+            const filename = key.split('/').pop();
+            uploadInfo = {
+                filename,
+                userId,
+                uploadedAt: userRecord.updatedAt,
+                mimetype: 'image/jpeg',
+                s3Key: key
+            };
+            // Cache it for subsequent requests this runtime
+            userUploads.set(userId, uploadInfo);
+        }
+        
+        // Generate signed URL
+        const signedUrl = await getSignedImageUrl(
+            "nfacialimagescollections",
+            uploadInfo.s3Key,
+            expiresIn * 60 * 60 // Convert hours to seconds
+        );
+
+        if (!signedUrl) {
+            return res.status(500).json({
+                success: false, 
+                message: "Failed to generate signed URL"
+            });
+        }
+
+        // Calculate expiration time
+        const expirationTime = new Date();
+        expirationTime.setHours(expirationTime.getHours() + expiresIn);
+
+        return res.status(200).json({
+            success: true,
+            signedUrl,
+            expires: expirationTime.toISOString(),
+            expiresIn: `${expiresIn} ${expiresIn === 1 ? 'hour' : 'hours'}`,
+            imageInfo: {
+                filename: uploadInfo.filename,
+                userId: uploadInfo.userId,
+                uploadedAt: uploadInfo.uploadedAt,
+                contentType: uploadInfo.mimetype
+            }
+        });
+
+    } catch (error) {
+        console.error("[ERROR] Generating Signed URL Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to generate signed URL",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+
+// ADMIN: Get signed URLs for any user by userId
+router.get("/s3/admin/signed-urls/:userId", verifyToken, async (req, res) => {
+  try {
+    // Debug info to see what's coming in the request
+    console.log(`Admin signed URL request for userId: ${req.params.userId}`);
+    console.log(`Request from user:`, req.user);
+    
+    // Authorize admin based on AdminUsers table (token only carries userId)
+    const adminUserId = req.user && req.user.userId;
+    if (!adminUserId) {
+      console.log("No userId found in token");
+      return res.status(401).json({ success: false, message: "Unauthorized - No user ID" });
+    }
+
+    const Admin = require('../../admin/admin.model');
+    console.log(`Checking if ${adminUserId} is an admin...`);
+    
+    // Try to find admin record
+    const adminRecord = await Admin.get(adminUserId);
+    
+    // If no admin record or not admin role, check if it might be a superadmin
+    if (!adminRecord || (adminRecord.role && adminRecord.role !== 'admin')) {
+      console.log(`User ${adminUserId} is not in admin table or not admin role.`);
+      // Also accept 'superadmin' role if present in token
+      if (req.user.role === 'admin' || req.user.role === 'superadmin') {
+        console.log(`But token has role: ${req.user.role}, so allowing access`);
+      } else {
+        console.log(`Role in token: ${req.user.role || 'none'}`);
+        return res.status(403).json({ success: false, message: "Admins only" });
+      }
+    } else {
+      console.log(`Admin verified: ${adminUserId}`);
+    }
+
+    const targetUserId = req.params.userId;
+    console.log(`Looking up user ${targetUserId}`);
+    
+    // First try to find in User model
+    const user = await User.get(targetUserId);
+    
+    if (!user) {
+      console.log(`User ${targetUserId} not found`);
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    
+    if (!user.uploadedPhoto) {
+      console.log(`User ${targetUserId} has no uploaded photo`);
+      return res.status(404).json({ success: false, message: "User has no uploaded photo" });
+    }
+    
+    console.log(`Found user photo: ${user.uploadedPhoto}`);
+
+    // Derive S3 key from stored value (URL or key)
+    let key = user.uploadedPhoto;
+    try {
+      if (/^https?:\/\//i.test(user.uploadedPhoto)) {
+        const url = new URL(user.uploadedPhoto);
+        key = url.pathname.replace(/^\//, "");
+        console.log(`Extracted S3 key from URL: ${key}`);
+      }
+    } catch (err) {
+      console.log(`Error parsing URL: ${err.message}`);
+    }
+
+    const bucket = process.env.AWS_S3_BUCKET || process.env.S3_BUCKET_NAME || 'nfacialimagescollections';
+    const expiresSec = Math.max(60, parseInt(req.query.expires, 10) || 3600); // min 60s
+    
+    console.log(`Generating signed URL for bucket: ${bucket}, key: ${key}, expires: ${expiresSec}s`);
+    
+    // Create AWS S3 instance for direct access
+    const s3 = new AWS.S3({
+      region: process.env.AWS_REGION || 'ap-south-1',
+      signatureVersion: 'v4'
+    });
+    
+    let signedUrl;
+    try {
+      // Use getSignedUrl instead of custom function for more direct control
+      signedUrl = await s3.getSignedUrlPromise('getObject', {
+        Bucket: bucket,
+        Key: key,
+        Expires: expiresSec
+      });
+      console.log(`Generated signed URL successfully`);
+    } catch (signErr) {
+      console.error(`Error generating signed URL: ${signErr.message}`);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to generate signed URL for image",
+        error: process.env.NODE_ENV === 'development' ? signErr.message : undefined
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      urls: { uploadedPhoto: signedUrl, aadhaarPhoto: user.aadhaarPhoto || null },
+      user: {
+        userId: user.userId,
+        uploadedPhoto: user.uploadedPhoto,
+        updatedAt: user.updatedAt
+      },
+      bucket,
+      expiresIn: expiresSec,
+      s3Key: key
+    });
+  } catch (err) {
+    console.error("Admin signed URL error:", err);
+    return res.status(500).json({ success: false, message: "Error generating signed URL", error: process.env.NODE_ENV === 'development' ? err.message : undefined });
+  }
+});
+
+// Simplified admin endpoint for testing
+router.get("/admin/user-image/:userId", verifyToken, async (req, res) => {
+  try {
+    const adminUserId = req.user && req.user.userId;
+    if (!adminUserId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    
+    console.log(`Admin image request for user ${req.params.userId} by admin ${adminUserId}`);
+    
+    // Skip complex admin checks for testing
+    const targetUserId = req.params.userId;
+    const user = await User.get(targetUserId);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "User not found",
+        requestedId: targetUserId,
+        requestingAdmin: adminUserId
+      });
+    }
+    
+    // Return user data even if no photo, to help debug
+    return res.status(200).json({
+      success: true,
+      user: {
+        userId: user.userId,
+        hasUploadedPhoto: !!user.uploadedPhoto,
+        uploadedPhoto: user.uploadedPhoto,
+        updatedAt: user.updatedAt
+      },
+      adminId: adminUserId,
+      message: user.uploadedPhoto ? "User has uploaded photo" : "User has no uploaded photo"
+    });
+  } catch (err) {
+    console.error("Admin user image error:", err);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Error retrieving user image data", 
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    });
+  }
+});
+
+// Check AWS connection status
+router.get("/aws-status", async (req, res) => {
+    try {
+        return res.status(200).json({
+            success: true,
+            aws: {
+                s3Available: s3Available,
+                bucketName: "nfacialimagescollections",
+                hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+                hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+                region: process.env.AWS_REGION || "ap-south-1"
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Failed to check AWS status",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// Test S3 connection by listing buckets
+router.get("/test-s3-connection", async (req, res) => {
+    try {
+        if (!s3Available) {
+            return res.status(503).json({
+                success: false,
+                message: "S3 client not initialized"
+            });
+        }
+
+        const listBucketsResponse = await s3.send(new ListBucketsCommand({}));
+        
+        return res.status(200).json({
+            success: true,
+            message: "S3 connection successful",
+            buckets: listBucketsResponse.Buckets?.map(bucket => bucket.Name) || [],
+            bucketCount: listBucketsResponse.Buckets?.length || 0
+        });
+    } catch (error) {
+        console.error("[ERROR] S3 Connection Test Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to connect to S3",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// ADMIN ENDPOINTS
+
+// List all uploads (admin endpoint)
+router.get("/admin/uploads", async (req, res) => {
+    try {
+        // Convert the Map to an array
+        const uploads = Array.from(userUploads.entries()).map(([userId, uploadInfo]) => ({
+            userId,
+            ...uploadInfo
+        }));
+
+        return res.status(200).json({
+            success: true,
+            totalUploads: uploads.length,
+            uploads
+        });
+    } catch (error) {
+        console.error("[ERROR] Admin List Uploads Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to list uploads",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+// Clear all uploads (admin endpoint - for testing)
+router.delete("/admin/clear-all-uploads", async (req, res) => {
+    try {
+        const uploadCount = userUploads.size;
+        userUploads.clear();
+
+        return res.status(200).json({
+            success: true,
+            message: `All ${uploadCount} uploads have been cleared from memory`,
+            clearedCount: uploadCount
+        });
+    } catch (error) {
+        console.error("[ERROR] Admin Clear Uploads Failed:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to clear uploads",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal server error"
+        });
+    }
+});
+
+module.exports = router;
+
+// Link a faceimage item to the authenticated user by RekognitionId
+// Body: { rekognitionId?: string, RekognitionId?: string, fullName?: string, FullName?: string }
+// Requires Bearer token; sets faceimage.UserId = token userId, and optionally updates FullName
+router.post('/faceimage/attach', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const RekognitionId = req.body.rekognitionId || req.body.RekognitionId;
+        const name = req.body.fullName || req.body.FullName || null;
+
+        if (!RekognitionId) {
+            return res.status(400).json({
+                success: false,
+                message: 'rekognitionId is required'
+            });
+        }
+
+        const dynamoDB = new AWS.DynamoDB.DocumentClient();
+
+        // Build update expression dynamically
+        let UpdateExpression = 'SET #Uid = :uid';
+        const ExpressionAttributeNames = { '#Uid': 'UserId' };
+        const ExpressionAttributeValues = { ':uid': userId };
+        if (name) {
+            UpdateExpression += ', #full = :full';
+            ExpressionAttributeNames['#full'] = 'FullName';
+            ExpressionAttributeValues[':full'] = name;
+        }
+
+        try {
+            console.log('[faceimage] attach request', { RekognitionId, userId, name });
+            const result = await dynamoDB.update({
+                TableName: 'faceimage',
+                Key: { RekognitionId },
+                UpdateExpression,
+                ExpressionAttributeNames,
+                ExpressionAttributeValues,
+                ConditionExpression: 'attribute_exists(RekognitionId)',
+                ReturnValues: 'ALL_NEW'
+            }).promise();
+
+            console.log('[faceimage] attach success', result.Attributes);
+            return res.status(200).json({
+                success: true,
+                message: 'faceimage linked to user',
+                item: result.Attributes
+            });
+        } catch (err) {
+            if (err && (err.code === 'ConditionalCheckFailedException' || /ConditionalCheckFailed/.test(err.message))) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'faceimage item not found for provided RekognitionId'
+                });
+            }
+            console.error('[faceimage] attach error', err);
+            throw err;
+        }
+    } catch (error) {
+        console.error('[ERROR] faceimage attach failed:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to attach faceimage to user',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// Debug: get faceimage item by RekognitionId
+router.get('/faceimage/:rekognitionId', verifyToken, async (req, res) => {
+    try {
+        const RekognitionId = req.params.rekognitionId;
+        const dynamoDB = new AWS.DynamoDB.DocumentClient();
+        const out = await dynamoDB.get({ TableName: 'faceimage', Key: { RekognitionId } }).promise();
+        if (!out.Item) {
+            return res.status(404).json({ success: false, message: 'Not found', RekognitionId });
+        }
+        return res.status(200).json({ success: true, item: out.Item });
+    } catch (error) {
+        console.error('[faceimage] get error', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch item', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
+    }
+});
+
+// Convenience: return "RekognitionId/FullName/UserId" path string
+router.get('/faceimage/path/:rekognitionId', verifyToken, async (req, res) => {
+    try {
+        const RekognitionId = req.params.rekognitionId;
+        const dynamoDB = new AWS.DynamoDB.DocumentClient();
+        const out = await dynamoDB.get({ TableName: 'faceimage', Key: { RekognitionId } }).promise();
+        if (!out.Item) {
+            return res.status(404).json({ success: false, message: 'Not found', RekognitionId });
+        }
+        const item = out.Item;
+        const path = `${item.RekognitionId}/${item.FullName || ''}/${item.UserId || ''}`;
+        return res.status(200).json({ success: true, path, RekognitionId: item.RekognitionId, FullName: item.FullName, UserId: item.UserId, item });
+    } catch (error) {
+        console.error('[faceimage] path error', error);
+        return res.status(500).json({ success: false, message: 'Failed to build path', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
+    }
+});

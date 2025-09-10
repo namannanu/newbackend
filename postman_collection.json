@@ -1,0 +1,854 @@
+{
+  "info": {
+    "name": "Complete API Collection - Updated",
+    "description": "Comprehensive collection for testing all API endpoints including authentication, face recognition, events, tickets, feedback, admin, and user management with simplified AWS configuration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "api_url",
+      "value": "{{base_url}}/api",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "face_image_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rekognition_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "event_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ticket_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "registration_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{api_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "health"]
+        },
+        "description": "Check if the API is running and healthy"
+      }
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/auth/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "signup"]
+            },
+            "description": "Register a new user to get access to the API"
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.token) {",
+                  "        pm.collectionVariables.set('jwt_token', response.token);",
+                  "        console.log('JWT token saved:', response.token.substring(0, 50) + '...');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login user and get JWT token for authentication"
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/auth",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth"]
+            },
+            "description": "Get current authenticated user information"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Logout user and invalidate JWT token"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Face Recognition",
+      "item": [
+        {
+          "name": "Upload Face Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.faceImage && response.data.faceImage._id) {",
+                  "        pm.collectionVariables.set('face_image_id', response.data.faceImage._id);",
+                  "        console.log('Face image ID saved:', response.data.faceImage._id);",
+                  "    }",
+                  "    if (response.data && response.data.faceImage && response.data.faceImage.rekognitionId) {",
+                  "        pm.collectionVariables.set('rekognition_id', response.data.faceImage.rekognitionId);",
+                  "        console.log('Rekognition ID saved:', response.data.faceImage.rekognitionId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "fullName",
+                  "value": "Test Person",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{api_url}}/face-recognition/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "upload"]
+            },
+            "description": "Upload a face image for recognition and storage in AWS S3"
+          }
+        },
+        {
+          "name": "Get All Face Images",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/face-recognition",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition"]
+            },
+            "description": "Get all uploaded face images with pagination support"
+          }
+        },
+        {
+          "name": "Search Face Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{api_url}}/face-recognition/search-face",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "search-face"]
+            },
+            "description": "Search for a face in the database using AWS Rekognition"
+          }
+        },
+        {
+          "name": "Search by Name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/face-recognition/search?name=Test",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "search"],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Test"
+                }
+              ]
+            },
+            "description": "Search face images by name using text search"
+          }
+        },
+        {
+          "name": "Get Face Image by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/face-recognition/{{face_image_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "{{face_image_id}}"]
+            },
+            "description": "Get a specific face image by MongoDB ID"
+          }
+        },
+        {
+          "name": "Get Face Image by Rekognition ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/face-recognition/rekognition/{{rekognition_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "rekognition", "{{rekognition_id}}"]
+            },
+            "description": "Get a face image by AWS Rekognition ID"
+          }
+        },
+        {
+          "name": "Get Image from S3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/face-recognition/image/test-image-key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "image", "test-image-key"]
+            },
+            "description": "Get image directly from AWS S3 bucket"
+          }
+        },
+        {
+          "name": "Update Face Image",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Updated Test Person\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/face-recognition/{{face_image_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "{{face_image_id}}"]
+            },
+            "description": "Update face image metadata"
+          }
+        },
+        {
+          "name": "Delete Face Image",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/face-recognition/{{face_image_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "face-recognition", "{{face_image_id}}"]
+            },
+            "description": "Delete a face image from database and S3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AWS Direct Upload",
+      "item": [
+        {
+          "name": "Upload to S3 (Direct)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "fullname",
+                  "value": "test-image",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{api_url}}/amplify/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "amplify", "upload"]
+            },
+            "description": "Direct upload to S3 using the working amplify.js route"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Get Event Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/events/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "events", "stats"]
+            },
+            "description": "Get comprehensive event statistics and analytics"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "Verify Ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticketId\": \"{{ticket_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/tickets/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tickets", "verify"]
+            },
+            "description": "Verify ticket validity and authenticity"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback",
+      "item": [
+        {
+          "name": "Mark Feedback as Reviewed",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewed\": true,\n  \"adminNotes\": \"Feedback reviewed and addressed\"\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/feedback/feedback-id/review",
+              "host": ["{{base_url}}"],
+              "path": ["api", "feedback", "feedback-id", "review"]
+            },
+            "description": "Mark feedback as reviewed by admin with notes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get Activity Log",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/admin/activity",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "activity"]
+            },
+            "description": "Get comprehensive admin activity log"
+          }
+        },
+        {
+          "name": "Create Employee",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"employee@example.com\",\n  \"password\": \"password123\",\n  \"phone\": \"+1234567890\",\n  \"permissions\": [\"read\", \"write\"]\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/admin/employees",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "employees"]
+            },
+            "description": "Create a new employee user with specified permissions"
+          }
+        },
+        {
+          "name": "Update Employee Permissions",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{user_id}}\",\n  \"permissions\": [\"read\", \"write\", \"admin\"]\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/admin/employees/permissions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "employees", "permissions"]
+            },
+            "description": "Update employee permissions and access levels"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/users/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "me"]
+            },
+            "description": "Get current user profile information"
+          }
+        },
+        {
+          "name": "Verify Face",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{api_url}}/users/verify-face",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "verify-face"]
+            },
+            "description": "Verify user identity using face recognition"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Registrations",
+      "item": [
+        {
+          "name": "Get Registration Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/registrations/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "stats"]
+            },
+            "description": "Get comprehensive registration statistics"
+          }
+        },
+        {
+          "name": "Get Registrations by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/registrations/status/confirmed",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "status", "confirmed"]
+            },
+            "description": "Get registrations filtered by status (confirmed, pending, cancelled)"
+          }
+        },
+        {
+          "name": "Get Event Registrations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/registrations/event/{{event_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "event", "{{event_id}}"]
+            },
+            "description": "Get all registrations for a specific event"
+          }
+        },
+        {
+          "name": "Get User Registrations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/registrations/user/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "user", "{{user_id}}"]
+            },
+            "description": "Get all registrations for a specific user"
+          }
+        },
+        {
+          "name": "Check In User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkInTime\": \"2025-01-27T10:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/registrations/{{registration_id}}/checkin",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "{{registration_id}}", "checkin"]
+            },
+            "description": "Check in a user for an event with timestamp"
+          }
+        },
+        {
+          "name": "Start Face Verification",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verificationStarted\": true\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/registrations/{{registration_id}}/face-verification/start",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "{{registration_id}}", "face-verification", "start"]
+            },
+            "description": "Start face verification process for registration"
+          }
+        },
+        {
+          "name": "Complete Face Verification",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verificationCompleted\": true,\n  \"confidence\": 95.5\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/registrations/{{registration_id}}/face-verification/complete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "{{registration_id}}", "face-verification", "complete"]
+            },
+            "description": "Complete face verification process with confidence score"
+          }
+        },
+        {
+          "name": "Issue Ticket",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticketIssued\": true,\n  \"ticketNumber\": \"TKT-2025-001\"\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/registrations/{{registration_id}}/issue-ticket",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "{{registration_id}}", "issue-ticket"]
+            },
+            "description": "Issue a digital ticket for registration"
+          }
+        },
+        {
+          "name": "Admin Override",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminOverride\": true,\n  \"reason\": \"Manual override by admin\"\n}"
+            },
+            "url": {
+              "raw": "{{api_url}}/registrations/{{registration_id}}/admin-override",
+              "host": ["{{base_url}}"],
+              "path": ["api", "registrations", "{{registration_id}}", "admin-override"]
+            },
+            "description": "Admin override for registration with reason"
+          }
+                }
+      ]
+    }
+  ]
+} 

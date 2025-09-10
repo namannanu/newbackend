@@ -1,0 +1,480 @@
+{
+  "info": {
+    "_postman_id": "482e3c55-6a01-42a0-852c-7d1b2b7c7ac0",
+    "name": "Amplify S3 API Tests",
+    "description": "Tests for image upload, access and admin functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Debug and Status",
+      "description": "Basic endpoints to check the status and configuration",
+      "item": [
+        {
+          "name": "Ping Amplify Router",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/s3/test-ping",
+              "host": ["{{base_url}}"],
+              "path": ["api", "s3", "test-ping"]
+            },
+            "description": "Simple ping to verify amplify router is mounted and working"
+          }
+        },
+        {
+          "name": "List All Routes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/s3/_debug/routes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "s3", "_debug", "routes"]
+            },
+            "description": "List all routes registered on the amplify router"
+          }
+        },
+        {
+          "name": "Check AWS Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/aws-status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aws-status"]
+            },
+            "description": "Check AWS connection and credentials status"
+          }
+        },
+        {
+          "name": "Test S3 Connection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-s3-connection",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-s3-connection"]
+            },
+            "description": "Test connection to S3 by listing buckets"
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Image Management",
+      "description": "Endpoints for user image uploads and management",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "fullname",
+                  "value": "Test User",
+                  "type": "text"
+                },
+                {
+                  "key": "rekognitionId",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "upload"]
+            },
+            "description": "Upload an image to S3 and update user record"
+          }
+        },
+        {
+          "name": "Delete Image",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "delete"]
+            },
+            "description": "Delete the current user's uploaded image"
+          }
+        },
+        {
+          "name": "Get My Upload Info",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/my-upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "my-upload"]
+            },
+            "description": "Get information about the current user's uploaded image"
+          }
+        },
+        {
+          "name": "Retrieve Image URL",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/retrieve-image",
+              "host": ["{{base_url}}"],
+              "path": ["api", "retrieve-image"]
+            },
+            "description": "Get the URL of the current user's uploaded image"
+          }
+        },
+        {
+          "name": "Check Image Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/get-image-status/{{userId}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "get-image-status", "{{userId}}"]
+            },
+            "description": "Check if a user has an uploaded image and get its status"
+          }
+        },
+        {
+          "name": "Get My Signed URL",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/my-signed-url?expires=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "my-signed-url"],
+              "query": [
+                {
+                  "key": "expires",
+                  "value": "1",
+                  "description": "Expiration time in hours"
+                }
+              ]
+            },
+            "description": "Get a signed URL to access the current user's image"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Endpoints",
+      "description": "Admin-only endpoints for managing user images and uploads",
+      "item": [
+        {
+          "name": "Admin: List All Uploads",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/uploads",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "uploads"]
+            },
+            "description": "Admin endpoint to list all user uploads in memory"
+          }
+        },
+        {
+          "name": "Admin: Clear All Uploads",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/clear-all-uploads",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "clear-all-uploads"]
+            },
+            "description": "Admin endpoint to clear all uploads from memory"
+          }
+        },
+        {
+          "name": "Admin: Get User Image Info",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/user-image/{{userId}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "user-image", "{{userId}}"]
+            },
+            "description": "Admin endpoint to get a user's image information (simplified test endpoint)"
+          }
+        },
+        {
+          "name": "Admin: Get User Signed URL",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/s3/admin/signed-urls/{{userId}}?expires=3600",
+              "host": ["{{base_url}}"],
+              "path": ["api", "s3", "admin", "signed-urls", "{{userId}}"],
+              "query": [
+                {
+                  "key": "expires",
+                  "value": "3600",
+                  "description": "Expiration time in seconds"
+                }
+              ]
+            },
+            "description": "Admin endpoint to get a signed URL for any user's image"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FaceImage Integration",
+      "description": "Endpoints for working with the faceimage table",
+      "item": [
+        {
+          "name": "Attach FaceImage",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rekognitionId\": \"recognition123\",\n  \"fullName\": \"Test User\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/faceimage/attach",
+              "host": ["{{base_url}}"],
+              "path": ["api", "faceimage", "attach"]
+            },
+            "description": "Link a faceimage item to the authenticated user"
+          }
+        },
+        {
+          "name": "Get FaceImage",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/faceimage/{{recognitionId}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "faceimage", "{{recognitionId}}"]
+            },
+            "description": "Get a faceimage item by RekognitionId"
+          }
+        },
+        {
+          "name": "Get FaceImage Path",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/faceimage/path/{{recognitionId}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "faceimage", "path", "{{recognitionId}}"]
+            },
+            "description": "Get a formatted path for a faceimage item"
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "user_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT token for a regular user"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT token for an admin user"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string",
+      "description": "User ID to test with"
+    },
+    {
+      "key": "recognitionId",
+      "value": "recognition123",
+      "type": "string",
+      "description": "Recognition ID for faceimage tests"
+    }
+  ]
+}

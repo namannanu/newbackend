@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Verification Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .status-pills {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .status-pill {
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .status-pill.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-pill.secure {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .users-grid {
+            display: grid;
+            gap: 30px;
+        }
+
+        .user-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .user-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .user-info h3 {
+            color: #333;
+            font-size: 1.4rem;
+            margin-bottom: 8px;
+        }
+
+        .user-meta {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .pending-badge {
+            background: linear-gradient(135deg, #ffc107, #ffb300);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .images-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 25px;
+        }
+
+        .image-box {
+            border: 3px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .image-box.has-image {
+            border-color: #28a745;
+            background: rgba(40, 167, 69, 0.05);
+        }
+
+        .image-box.no-image {
+            border-color: #dc3545;
+            border-style: dashed;
+            background: rgba(220, 53, 69, 0.05);
+        }
+
+        .image-box.aadhar-placeholder {
+            border-color: #6c757d;
+            border-style: dashed;
+            background: rgba(108, 117, 125, 0.05);
+        }
+
+        .image-box h4 {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        .image-box img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            object-fit: cover;
+        }
+
+        .no-image-text {
+            color: #dc3545;
+            font-style: italic;
+            font-size: 1rem;
+        }
+
+        .placeholder-text {
+            color: #6c757d;
+            font-style: italic;
+            font-size: 1rem;
+            text-align: center;
+        }
+
+        .aadhar-upload {
+            margin-top: 15px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .file-label:hover {
+            background: #5a6268;
+        }
+
+        .preview-container {
+            margin-top: 10px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+            font-size: 1.2rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            color: #666;
+        }
+
+        .empty-state h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .comparison-hint {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+            font-size: 0.95rem;
+        }
+
+        .image-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .image-status.exists {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .image-status.missing {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        @media (max-width: 768px) {
+            .images-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 User Verification Dashboard</h1>
+            <p>Facial Recognition Management System - Verify user identities by comparing uploaded photos with Aadhar documents</p>
+            <div class="status-pills">
+                <div class="status-pill connected">🟢 Backend Connected</div>
+                <div class="status-pill secure">🔐 Secure Access</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="loadPendingUsers()">
+                🔄 Refresh List
+            </button>
+            <span id="userCount" style="color: #666; font-size: 1.1rem; margin-left: auto;">
+                Loading...
+            </span>
+        </div>
+
+        <div id="usersContainer">
+            <div class="loading">
+                🔄 Loading pending verifications...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000/api'; // Adjust as needed
+        let authToken = null;
+
+        // Mock auth token for demo - in production, get this from login
+        const mockAuthToken = 'your-admin-jwt-token-here';
+
+        async function loadPendingUsers() {
+            const container = document.getElementById('usersContainer');
+            const userCount = document.getElementById('userCount');
+            
+            try {
+                container.innerHTML = '<div class="loading">🔄 Loading pending verifications...</div>';
+                
+                const response = await fetch(`${API_BASE_URL}/admin/verification/pending`, {
+                    headers: {
+                        'Authorization': `Bearer ${mockAuthToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const users = data.data.pendingUsers;
+                    userCount.textContent = `${users.length} users pending verification`;
+                    
+                    if (users.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <h3>🎉 All Clear!</h3>
+                                <p>No users pending verification at the moment.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    container.innerHTML = `
+                        <div class="users-grid">
+                            ${users.map(user => createUserCard(user)).join('')}
+                        </div>
+                    `;
+                } else {
+                    throw new Error(data.message || 'Failed to load users');
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>❌ Error Loading Data</h3>
+                        <p>Please check your connection and try again.</p>
+                        <p style="color: #dc3545; font-size: 0.9rem;">${error.message}</p>
+                    </div>
+                `;
+                userCount.textContent = 'Error loading count';
+            }
+        }
+
+        function createUserCard(user) {
+            return `
+                <div class="user-card">
+                    <div class="user-header">
+                        <div class="user-info">
+                            <h3>${user.fullName}</h3>
+                            <div class="user-meta">
+                                <div>📧 ${user.email}</div>
+                                <div>📱 ${user.phone}</div>
+                                <div>📅 Registered: ${new Date(user.createdAt).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                        <div class="pending-badge">⏳ Pending</div>
+                    </div>
+
+                    <div class="comparison-hint">
+                        <strong>💡 Verification Instructions:</strong> Compare the user's uploaded photo (left) with their Aadhar card image (right). Both images should clearly show the same person.
+                    </div>
+
+                    <div class="images-container">
+                        <div class="image-box ${user.userImage.exists ? 'has-image' : 'no-image'}">
+                            <div class="image-status ${user.userImage.exists ? 'exists' : 'missing'}">
+                                ${user.userImage.exists ? '✅ Available' : '❌ Missing'}
+                            </div>
+                            <h4>📸 User Uploaded Photo</h4>
+                            ${user.userImage.exists && user.userImage.signedUrl 
+                                ? `<img src="${user.userImage.signedUrl}" alt="User photo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                   <div class="no-image-text" style="display:none;">Failed to load image</div>`
+                                : '<div class="no-image-text">No image uploaded</div>'
+                            }
+                        </div>
+
+                        <div class="image-box aadhar-placeholder">
+                            <h4>🆔 Aadhar Card Photo</h4>
+                            <div id="aadhar-preview-${user._id}">
+                                <div class="placeholder-text">
+                                    📋 Upload Aadhar card image for verification<br>
+                                    <small>(Future API integration ready)</small>
+                                </div>
+                            </div>
+                            <div class="aadhar-upload">
+                                <input type="file" id="aadhar-${user._id}" class="file-input" accept="image/*" onchange="previewAadharImage('${user._id}', this)">
+                                <label for="aadhar-${user._id}" class="file-label">
+                                    📁 Choose Aadhar Image
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn btn-success" onclick="verifyUser('${user._id}', 'verified')">
+                            ✅ Approve
+                        </button>
+                        <button class="btn btn-danger" onclick="verifyUser('${user._id}', 'rejected')">
+                            ❌ Reject
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function previewAadharImage(userId, input) {
+            const preview = document.getElementById(`aadhar-preview-${userId}`);
+            const file = input.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `
+                        <img src="${e.target.result}" alt="Aadhar preview" style="max-width: 100%; max-height: 200px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);">
+                        <div style="margin-top: 10px; font-size: 0.9rem; color: #28a745;">
+                            ✅ Ready for verification
+                        </div>
+                    `;
+                    
+                    // Update the image box styling
+                    const imageBox = preview.closest('.image-box');
+                    imageBox.className = 'image-box has-image';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function verifyUser(userId, status) {
+            try {
+                const reason = status === 'rejected' ? prompt('Please provide a reason for rejection:') : null;
+                
+                if (status === 'rejected' && !reason) {
+                    return; // User cancelled
+                }
+
+                const response = await fetch(`${API_BASE_URL}/admin/verification/user/${userId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${mockAuthToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        verificationStatus: status,
+                        ...(reason && { reason })
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert(`✅ User ${status === 'verified' ? 'approved' : 'rejected'} successfully!`);
+                    loadPendingUsers(); // Refresh the list
+                } else {
+                    throw new Error(data.message || `Failed to ${status} user`);
+                }
+            } catch (error) {
+                console.error('Error updating user:', error);
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPendingUsers();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadPendingUsers, 30000);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+{
+  "Users": [
+    {
+      "userId": "user_001",
+      "email": "john.doe@example.com",
+      "name": "John Doe",
+      "phone": "+1234567890",
+      "role": "user",
+      "uploadedPhoto": null,
+      "createdAt": "2025-09-04T10:00:00Z"
+    },
+    {
+      "userId": "user_002",
+      "email": "jane.smith@example.com",
+      "name": "Jane Smith",
+      "phone": "+1234567891",
+      "role": "user",
+      "uploadedPhoto": null,
+      "createdAt": "2025-09-04T10:01:00Z"
+    }
+  ],
+  "AdminUsers": [
+    {
+      "userId": "admin_001",
+      "email": "admin@example.com",
+      "name": "Admin User",
+      "password": "$2a$10$DlKu.5p5YR3xF0uKFvO3q.MkylVT6jHT9BuoNNJm6b.hLMANzuU1W",
+      "phone": "+1234567899",
+      "role": "superadmin",
+      "status": "active",
+      "permissions": ["manage_users", "manage_events", "manage_tickets", "manage_admins"],
+      "createdAt": "2025-09-04T10:00:00Z",
+      "lastLogin": null,
+      "updatedAt": "2025-09-04T10:00:00Z"
+    },
+    {
+      "userId": "admin_002",
+      "email": "moderator@example.com",
+      "name": "Event Moderator",
+      "password": "$2a$10$DlKu.5p5YR3xF0uKFvO3q.MkylVT6jHT9BuoNNJm6b.hLMANzuU1W",
+      "phone": "+1234567898",
+      "role": "moderator",
+      "status": "active",
+      "permissions": ["manage_events", "manage_tickets"],
+      "createdAt": "2025-09-04T10:01:00Z",
+      "lastLogin": null,
+      "updatedAt": "2025-09-04T10:01:00Z"
+    }
+  ],
+  "EventOrganiser": [
+    {
+      "organiserId": "org_001",
+      "name": "Event Masters",
+      "email": "contact@eventmasters.com",
+      "phone": "+1234567892",
+      "status": "active",
+      "joinDate": "2025-09-04T10:00:00Z"
+    },
+    {
+      "organiserId": "org_002",
+      "name": "Festival Pro",
+      "email": "info@festivalpro.com",
+      "phone": "+1234567893",
+      "status": "active",
+      "joinDate": "2025-09-04T10:01:00Z"
+    }
+  ],
+  "Events": [
+    {
+      "eventId": "evt_001",
+      "name": "Summer Music Festival",
+      "organiserId": "org_001",
+      "date": "2025-12-25T18:00:00Z",
+      "location": "Central Park",
+      "status": "upcoming",
+      "capacity": 1000,
+      "ticketPrice": 49.99,
+      "description": "Annual summer music festival featuring top artists"
+    },
+    {
+      "eventId": "evt_002",
+      "name": "Tech Conference 2025",
+      "organiserId": "org_002",
+      "date": "2025-12-30T09:00:00Z",
+      "location": "Convention Center",
+      "status": "upcoming",
+      "capacity": 500,
+      "ticketPrice": 299.99,
+      "description": "Annual technology conference"
+    }
+  ],
+  "EventUserRegistrations": [
+    {
+      "registrationId": "reg_001",
+      "userId": "user_001",
+      "eventId": "evt_001",
+      "registrationDate": "2025-09-04T10:30:00Z",
+      "status": "pending",
+      "checkInTime": null,
+      "waitingStatus": "queued",
+      "faceVerificationStatus": "pending",
+      "ticketAvailabilityStatus": "pending",
+      "verificationAttempts": 0,
+      "lastVerificationAttempt": null,
+      "ticketIssued": false,
+      "ticketIssuedDate": null
+    },
+    {
+      "registrationId": "reg_002",
+      "userId": "user_002",
+      "eventId": "evt_002",
+      "registrationDate": "2025-09-04T10:35:00Z",
+      "status": "verified",
+      "checkInTime": null,
+      "waitingStatus": "complete",
+      "faceVerificationStatus": "success",
+      "ticketAvailabilityStatus": "available",
+      "verificationAttempts": 1,
+      "lastVerificationAttempt": "2025-09-04T10:36:00Z",
+      "ticketIssued": true,
+      "ticketIssuedDate": "2025-09-04T10:37:00Z"
+    }
+  ],
+  "EventTickets": [
+    {
+      "ticketId": "tkt_001",
+      "eventId": "evt_001",
+      "userId": "user_001",
+      "registrationId": "reg_001",
+      "status": "pending",
+      "price": 49.99,
+      "purchaseDate": "2025-09-04T10:31:00Z",
+      "validationStatus": "pending"
+    },
+    {
+      "ticketId": "tkt_002",
+      "eventId": "evt_002",
+      "userId": "user_002",
+      "registrationId": "reg_002",
+      "status": "active",
+      "price": 299.99,
+      "purchaseDate": "2025-09-04T10:36:00Z",
+      "validationStatus": "valid"
+    }
+  ],
+  "Feedback": [
+    {
+      "feedbackId": "fb_001",
+      "userId": "user_001",
+      "eventId": "evt_001",
+      "rating": 4,
+      "category": "overall",
+      "subject": "Great Event",
+      "message": "Really enjoyed the music festival!",
+      "status": "new",
+      "createdAt": "2025-09-04T22:00:00Z"
+    },
+    {
+      "feedbackId": "fb_002",
+      "userId": "user_002",
+      "eventId": "evt_002",
+      "rating": 5,
+      "category": "technical",
+      "subject": "Excellent Conference",
+      "message": "The tech presentations were amazing!",
+      "status": "reviewed",
+      "createdAt": "2025-09-04T18:00:00Z"
+    }
+  ],
+  "AdminActivityLog": [
+    {
+      "logId": "log_001",
+      "adminUserId": "admin_001",
+      "action": "CREATE_EVENT",
+      "details": "Created new event: Summer Music Festival",
+      "timestamp": "2025-09-04T10:00:00Z",
+      "status": "success"
+    }
+  ],
+  "AuditLog": [
+    {
+      "auditId": "audit_001",
+      "performedBy": "admin_001",
+      "action": "USER_VERIFICATION",
+      "details": "Verified user registration",
+      "timestamp": "2025-09-04T10:36:00Z"
+    }
+  ],
+  "SystemConfiguration": [
+    {
+      "configId": "config_001",
+      "key": "face_verification_threshold",
+      "value": "90",
+      "description": "Minimum similarity score for face verification",
+      "updatedAt": "2025-09-04T00:00:00Z"
+    }
+  ],
+  "FaceImage": [
+    {
+      "rekognitionId": "face_001",
+      "userId": "user_001",
+      "s3Key": "faces/user_001/profile.jpg",
+      "status": "active",
+      "createdAt": "2025-09-04T10:00:00Z"
+    }
+  ]
+}

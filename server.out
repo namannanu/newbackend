@@ -1,0 +1,124 @@
+Environment check:
+PORT: 3001
+AWS_ACCESS_KEY_ID: Found
+AWS_SECRET_ACCESS_KEY: Found
+AWS_REGION: ap-south-1
+AWS SDK v3 initialized successfully
+[INFO] S3 client initialized successfully
+[Amplify] Router module loaded.
+🔄 Registering routes...
+✅ Auth routes registered
+✅ Event routes registered
+✅ Organizer routes registered
+✅ Public organizer routes registered
+✅ Ticket routes registered
+✅ Feedback routes registered
+✅ Admin routes registered
+✅ Registration routes registered
+✅ User routes registered with enhanced security
+✅ Amplify routes registered
+✅ Admin URL Test router registered at /api/test-admin-url
+✅ Test Face ID routes registered
+Route: get /^\/api\/users\/?(?=\/|$)/i /:userId/presigned-urls
+Route: get /api/debug
+Route: get /api/health
+Route: post /^\/api\/auth\/?(?=\/|$)/i /signup
+Route: post /^\/api\/auth\/?(?=\/|$)/i /login
+Route: post /^\/api\/auth\/?(?=\/|$)/i /admin-login
+Route: post /^\/api\/auth\/?(?=\/|$)/i /admin/register
+Route: post /^\/api\/auth\/?(?=\/|$)/i /forgotPassword
+Route: patch /^\/api\/auth\/?(?=\/|$)/i /resetPassword/:token
+Route: get /^\/api\/auth\/?(?=\/|$)/i /validate-token
+Route: patch /^\/api\/auth\/?(?=\/|$)/i /updateMyPassword
+Route: get /^\/api\/events\/?(?=\/|$)/i /stats
+Route: get /^\/api\/events\/?(?=\/|$)/i /
+Route: post /^\/api\/events\/?(?=\/|$)/i /
+Route: get,patch,delete /^\/api\/events\/?(?=\/|$)/i /:id
+Route: get,post /^\/api\/organizers\/?(?=\/|$)/i /
+Route: get,patch,delete /^\/api\/organizers\/?(?=\/|$)/i /:id
+Route: get /^\/api\/public\/organizers\/?(?=\/|$)/i /
+Route: get /^\/api\/tickets\/?(?=\/|$)/i /event/:eventId
+Route: get,post /^\/api\/tickets\/?(?=\/|$)/i /
+Route: get,patch /^\/api\/tickets\/?(?=\/|$)/i /:id
+Route: post /^\/api\/tickets\/?(?=\/|$)/i /verify
+Route: get,post /^\/api\/feedback\/?(?=\/|$)/i /
+Route: get,patch /^\/api\/feedback\/?(?=\/|$)/i /:id
+Route: patch /^\/api\/feedback\/?(?=\/|$)/i /:id/review
+Route: get /^\/api\/admin\/?(?=\/|$)/i /stats
+Route: post /^\/api\/admin\/?(?=\/|$)/i /employees
+Route: get /^\/api\/admin\/?(?=\/|$)/i /employees
+Route: patch /^\/api\/admin\/?(?=\/|$)/i /employees/permissions
+Route: delete /^\/api\/admin\/?(?=\/|$)/i /employees/:id
+Route: post /^\/api\/admin\/?(?=\/|$)/i /admin-users
+Route: get /^\/api\/admin\/?(?=\/|$)/i /admin-users
+Route: post /^\/api\/admin\/?(?=\/|$)/i /register
+Route: get,post /^\/api\/registrations\/?(?=\/|$)/i /
+Route: get /^\/api\/registrations\/?(?=\/|$)/i /stats
+Route: get /^\/api\/registrations\/?(?=\/|$)/i /status/:status
+Route: get /^\/api\/registrations\/?(?=\/|$)/i /event/:eventId
+Route: get /^\/api\/registrations\/?(?=\/|$)/i /user/:userId
+Route: get,put,delete /^\/api\/registrations\/?(?=\/|$)/i /:id
+Route: put /^\/api\/registrations\/?(?=\/|$)/i /:id/checkin
+Route: put /^\/api\/registrations\/?(?=\/|$)/i /:id/face-verification/start
+Route: put /^\/api\/registrations\/?(?=\/|$)/i /:id/face-verification/complete
+Route: put /^\/api\/registrations\/?(?=\/|$)/i /:id/issue-ticket
+Route: put /^\/api\/registrations\/?(?=\/|$)/i /:id/admin-override
+Route: get /^\/api\/user\/?(?=\/|$)/i /userdetails
+Route: get /^\/api\/user\/?(?=\/|$)/i /presigned-urls/:userId
+Route: get /^\/api\/user\/?(?=\/|$)/i /
+Route: get,patch,delete /^\/api\/user\/?(?=\/|$)/i /:id
+Route: post /^\/api\/user\/?(?=\/|$)/i /:id/verify-face
+Route: get /^\/api\/user\/?(?=\/|$)/i /test
+Route: get /^\/api\/user\/?(?=\/|$)/i /test
+Route: get /^\/api\/user\/?(?=\/|$)/i /:userId/presigned-urls
+Route: get /^\/api\/?(?=\/|$)/i /s3/test-ping
+Route: get /^\/api\/?(?=\/|$)/i /s3/_debug/routes
+Route: post /^\/api\/?(?=\/|$)/i /upload
+Route: delete /^\/api\/?(?=\/|$)/i /delete
+Route: get /^\/api\/?(?=\/|$)/i /my-upload
+Route: get /^\/api\/?(?=\/|$)/i /retrieve-image
+Route: get /^\/api\/?(?=\/|$)/i /get-image-status/:userId
+Route: get /^\/api\/?(?=\/|$)/i /my-signed-url
+Route: get /^\/api\/?(?=\/|$)/i /admin/signed-urls/:userId
+Route: get /^\/api\/?(?=\/|$)/i /admin/user-image/:userId
+Route: get /^\/api\/?(?=\/|$)/i /aws-status
+Route: get /^\/api\/?(?=\/|$)/i /test-s3-connection
+Route: get /^\/api\/?(?=\/|$)/i /admin/uploads
+Route: delete /^\/api\/?(?=\/|$)/i /admin/clear-all-uploads
+Route: post /^\/api\/?(?=\/|$)/i /faceimage/attach
+Route: get /^\/api\/?(?=\/|$)/i /faceimage/:rekognitionId
+Route: get /^\/api\/?(?=\/|$)/i /faceimage/path/:rekognitionId
+Route: get /^\/api\/test-admin-url\/?(?=\/|$)/i /ping
+Route: get /^\/api\/test-admin-url\/?(?=\/|$)/i /admin-url/:userId
+Route: get /^\/api\/test\/?(?=\/|$)/i /test-face-id/:userId
+Route: post /^\/api\/test\/?(?=\/|$)/i /test-login
+Route: get /^\/api\/?(?=\/|$)/i /get-image-status/:userId
+Route: delete /^\/api\/?(?=\/|$)/i /delete-image/:userId
+Route: get /api/health
+🚀 Starting application...
+🔄 Establishing DynamoDB connection...
+🔄 Initializing DynamoDB connection...
+(node:4402) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+✅ DynamoDB connection test successful
+⚠️  Failed to setup CloudWatch alarms: Unexpected key 'StatisticType' found in params
+Table EventOrganiser already exists
+Table EventUserRegistrations already exists
+Table Events already exists
+Table EventFeedback already exists
+Table EventTickets already exists
+⚠️  Failed to setup Auto Scaling: Validation failed for scalable target. Reason: PAY_PER_REQUEST table mode is not scalable.
+✅ Continuous backups enabled for all tables
+✅ DynamoDB connection initialized successfully
+✅ DynamoDB connection established successfully!
+❌ Port 3001 is still in use, trying next port...
+✅ Server running on: http://localhost:3002
+🎉 Server is ready to accept requests!
+📡 API endpoints are now available
+🌐 AWS S3 Status: Configured
+🛑 SIGTERM received. Shutting down gracefully...
+✅ Server closed successfully.
