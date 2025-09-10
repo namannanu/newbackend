@@ -13,8 +13,17 @@ const initializeDynamoDB = async () => {
     console.log('🔄 Initializing DynamoDB connection...'.yellow);
 
     try {
+        // First, validate environment
+        const requiredEnvVars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION'];
+        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+        
+        if (missingVars.length > 0) {
+            console.warn(`⚠️ Missing environment variables: ${missingVars.join(', ')}`.yellow);
+            throw new Error('Missing required AWS credentials');
+        }
+
         // Check if we should use local DynamoDB mode (for development without AWS credentials)
-        const useLocalMode = process.env.USE_LOCAL_DB === 'true' || !process.env.AWS_ACCESS_KEY_ID;
+        const useLocalMode = process.env.USE_LOCAL_DB === 'true';
         
         if (useLocalMode) {
             console.log('🔧 Using LOCAL DynamoDB mode for development'.yellow);
