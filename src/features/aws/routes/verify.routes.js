@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const verifyAWSCredentials = require('../utils/verify-aws');
-const { attachDB } = require('../shared/middlewares/attachDB');
-const { adminMiddleware } = require('../shared/middlewares/admin.middleware');
+const verifyAWSCredentials = require('../../../utils/verify-aws');
+const { attachDB } = require('../../../shared/middlewares/attachDB');
+const { adminMiddleware } = require('../../../shared/middlewares/admin.middleware');
 
 // Protected route - only admins can verify AWS credentials
 router.get('/verify-aws-credentials', attachDB, adminMiddleware, async (req, res) => {
