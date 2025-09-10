@@ -192,15 +192,16 @@ const OrganizerModel = {
                 organiserId: organizerId
             },
             UpdateExpression: `SET 
-                totalRevenue = totalRevenue + :revenue,
-                totalEvents = totalEvents + :totalEvents,
-                activeEvents = activeEvents + :activeEvents,
+                totalRevenue = if_not_exists(totalRevenue, :zero) + :revenue,
+                totalEvents = if_not_exists(totalEvents, :zero) + :totalEvents,
+                activeEvents = if_not_exists(activeEvents, :zero) + :activeEvents,
                 lastActivity = :lastActivity,
                 updatedAt = :updatedAt`,
             ExpressionAttributeValues: {
-                ':revenue': revenue,
-                ':totalEvents': totalEvents,
-                ':activeEvents': activeEvents,
+                ':zero': 0,
+                ':revenue': Number(revenue),
+                ':totalEvents': Number(totalEvents),
+                ':activeEvents': Number(activeEvents),
                 ':lastActivity': timestamp,
                 ':updatedAt': timestamp
             },
