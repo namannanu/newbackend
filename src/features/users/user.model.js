@@ -202,8 +202,10 @@ async getByEmail(email) {
             TableName: this.tableName
         };
 
-        const result = await dynamoDB.scan(params).promise();
-        return result.Items;
+        // Use the initialized DocumentClient (dynamoDB here would be undefined)
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
+        return result && Array.isArray(result.Items) ? result.Items : [];
     },
 
     // Get user by ID (alias for get)
