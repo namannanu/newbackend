@@ -818,8 +818,12 @@ exports.getAllEmployees = catchAsync(async (req, res, next) => {
       results: sanitizedEmployees.length,
       data: {
         employees: sanitizedEmployees
-    }
-  });
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    return next(new AppError('Failed to fetch employees', 500));
+  }
 });
 
 // Get all admin users
