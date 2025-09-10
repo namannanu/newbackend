@@ -17,27 +17,43 @@ dotenv.config({
     path: path.join(__dirname, 'config', 'config.env'),
 });
 
-// Configure CORS
-const corsOptions = {
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps, curl requests or same origin)
-        if (!origin) {
-            return callback(null, true);
-        }
+// Serve static files (if any)
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
-        // Check if the origin is allowed
-        if (origin.endsWith('.vercel.app')) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Content-Type', 'Date', 'X-Api-Version', 'Authorization'],
-    credentials: true,
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-    maxAge: 86400
+// CORS: allow localhost in dev and vercel domains in prod
+const devOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:8080'
+];
+
+const prodOrigins = [];
+if (process.env.VERCEL_URL) {
+  prodOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+
+const allowedOrigins = [...devOrigins, ...prodOrigins];
+const vercelSubdomainRegex = /^https:\/\/([a-z0-9-]+)\.vercel\.app$/i;
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    const isAllowed =
+      allowedOrigins.includes(origin) || vercelSubdomainRegex.test(origin);
+
+    if (isAllowed) return callback(null, true);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400
 };
 
 // Basic Middleware
