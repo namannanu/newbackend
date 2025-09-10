@@ -19,12 +19,21 @@ const initializeDynamoDB = async () => {
         const verificationResult = await verifyAWSCredentials();
         
         // If we get here, credentials are verified
+        const credentials = {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        };
+
+        // Add session token if available (important for Lambda/Vercel environment)
+        if (process.env.AWS_SESSION_TOKEN) {
+            credentials.sessionToken = process.env.AWS_SESSION_TOKEN;
+        }
+
         const awsConfig = {
             region: process.env.AWS_REGION || 'ap-south-1',
-            credentials: new AWS.Credentials({
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-            })
+            credentials: new AWS.Credentials(credentials),
+            maxRetries: 3,
+            httpOptions: { timeout: 5000 } // 5 second timeout
         };
 
         // Check if we should use local DynamoDB mode (for development without AWS credentials)

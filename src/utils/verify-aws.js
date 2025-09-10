@@ -9,6 +9,7 @@ async function verifyAWSCredentials() {
         console.log('AWS_REGION:', process.env.AWS_REGION || 'not set');
         console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? `${process.env.AWS_ACCESS_KEY_ID.slice(0, 4)}...${process.env.AWS_ACCESS_KEY_ID.slice(-4)}` : 'not set');
         console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? '[HIDDEN]' : 'not set');
+        console.log('AWS_SESSION_TOKEN:', process.env.AWS_SESSION_TOKEN ? '[PRESENT]' : 'not set');
 
         // Check if essential variables are present
         if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
@@ -16,12 +17,21 @@ async function verifyAWSCredentials() {
         }
 
         // Configure AWS SDK
+        const credentials = {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        };
+
+        // Add session token if available (important for Lambda/Vercel environment)
+        if (process.env.AWS_SESSION_TOKEN) {
+            credentials.sessionToken = process.env.AWS_SESSION_TOKEN;
+        }
+
         AWS.config.update({
             region: process.env.AWS_REGION || 'ap-south-1',
-            credentials: new AWS.Credentials({
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-            })
+            credentials: new AWS.Credentials(credentials),
+            maxRetries: 3,
+            httpOptions: { timeout: 5000 } // 5 second timeout
         });
 
         // Test STS first (lightweight)
