@@ -3,24 +3,36 @@ const colors = require('colors');
 
 class AWSConfigValidator {
     static validateCredentials(config) {
+        // Normalize values: trim and treat empty strings as undefined
+        const normalized = {
+            accessKeyId: (config.accessKeyId || '').trim() || undefined,
+            secretAccessKey: (config.secretAccessKey || '').trim() || undefined,
+            region: (config.region || '').trim() || undefined,
+            // sessionToken is optional and may be undefined
+            sessionToken: (config.sessionToken || '').trim() || undefined
+        };
+
         const required = ['accessKeyId', 'secretAccessKey', 'region'];
-        const missing = required.filter(key => !config[key]);
+        const missing = required.filter(key => !normalized[key]);
         
         if (missing.length > 0) {
             throw new Error(`Missing required AWS configuration: ${missing.join(', ')}`);
         }
 
         // Check for whitespace in credentials
-        if (config.accessKeyId.includes(' ') || config.secretAccessKey.includes(' ')) {
+        if (normalized.accessKeyId.includes(' ') || normalized.secretAccessKey.includes(' ')) {
             throw new Error('AWS credentials contain spaces. Please remove any leading or trailing spaces.');
         }
 
-        // Validate access key format (typically starts with 'AKIA' for AWS access keys)
-        if (!config.accessKeyId.startsWith('AKIA')) {
-            throw new Error('Invalid AWS Access Key ID format. Access keys typically start with "AKIA"');
+        // Basic Access Key ID format validation: 16-32 uppercase alphanumeric
+        // Accepts permanent (e.g., AKIA, ABIA, AIDA) and temporary (ASIA) prefixes
+        const accessKeyId = normalized.accessKeyId;
+        if (!/^[A-Z0-9]{16,32}$/.test(accessKeyId)) {
+            throw new Error('Invalid AWS Access Key ID format.');
         }
 
-        return true;
+        // Return normalized values so callers can use them
+        return normalized;
     }
 }
 
@@ -36,19 +48,26 @@ const initializeDynamoDB = async () => {
     console.log('🔄 Initializing DynamoDB connection...'.yellow);
 
     try {
-        // Configure AWS credentials with session token support
-        const awsConfig = {
+        // Read and validate env configuration (trimming values and ignoring empty session tokens)
+        const envConfig = {
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
             region: process.env.AWS_REGION || 'ap-south-1',
-            sessionToken: process.env.AWS_SESSION_TOKEN // Optional
+            sessionToken: process.env.AWS_SESSION_TOKEN // Optional; may be empty
         };
 
-        // Validate AWS configuration
-        AWSConfigValidator.validateCredentials(awsConfig);
+        const valid = AWSConfigValidator.validateCredentials(envConfig);
+
+        // Build final AWS SDK config; only include sessionToken if present
+        const sdkConfig = {
+            accessKeyId: valid.accessKeyId,
+            secretAccessKey: valid.secretAccessKey,
+            region: valid.region,
+            ...(valid.sessionToken ? { sessionToken: valid.sessionToken } : {})
+        };
 
         // Configure AWS SDK
-        AWS.config.update(awsConfig);
+        AWS.config.update(sdkConfig);
 
         // Initialize DynamoDB instances if not already initialized
         if (!dynamoDB || !documentClient) {

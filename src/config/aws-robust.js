@@ -1,15 +1,32 @@
 const AWS = require('aws-sdk');
 
-// AWS Configuration
+// AWS Configuration with credentials
 const awsConfig = {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     region: process.env.AWS_REGION || 'ap-south-1',
-    sessionToken: process.env.AWS_SESSION_TOKEN // Optional for temporary credentials
+    credentials: new AWS.Credentials({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }),
+    maxRetries: 3,
+    httpOptions: {
+        timeout: 5000,
+        connectTimeout: 3000
+    }
 };
 
 // Configure AWS SDK
 AWS.config.update(awsConfig);
+
+// Add logging for credential loading
+const credentialsCallback = (err) => {
+    if (err) {
+        console.error('❌ Error loading credentials:', err.message);
+    } else {
+        console.log('✅ AWS credentials loaded successfully');
+    }
+};
+
+AWS.config.getCredentials(credentialsCallback);
 
 // Initialize AWS services
 const s3 = new AWS.S3();
