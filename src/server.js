@@ -5,8 +5,9 @@ const morgan = require('morgan');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
 const { initializeDynamoDB, dbOperations } = require('./config/db');
+const verifyAWSCredentials = require('./utils/verify-aws');
+const verifyRoutes = require('./features/aws/routes/verify.routes');
 const path = require('path');
-
 
 
 // Initialize Express app first
@@ -16,12 +17,16 @@ dotenv.config({
     path: path.join(__dirname, 'config', 'config.env'),
 });
 
-// Debug environment variables
-console.log('Environment check:');
-console.log('PORT:', process.env.PORT || 'Using default 3001');
-console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Found' : 'NOT FOUND');
-console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Found' : 'NOT FOUND');
-console.log('AWS_REGION:', process.env.AWS_REGION || 'ap-south-1');
+// Verify AWS credentials on startup
+verifyAWSCredentials()
+    .then(() => {
+        console.log('\n✅ AWS credentials verified successfully on startup'.green);
+    })
+    .catch((error) => {
+        console.error('\n❌ AWS credential verification failed on startup:'.red);
+        console.error('Error:', error.message);
+        // Don't exit - let the app try to start anyway in case it's in local mode
+    });
 
 // CORS Configuration
 const corsOptions = {
@@ -139,6 +144,7 @@ app.use('/api/feedback', feedbackRoutes);
 console.log('✅ Feedback routes registered');
 
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', verifyRoutes); // Add AWS verification routes
 console.log('✅ Admin routes registered');
 
 app.use('/api/registrations', registrationRoutes);

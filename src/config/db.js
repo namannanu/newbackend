@@ -9,18 +9,23 @@ let documentClient;
 let cache = new Map();
 let metricsCollector = new Map();
 
+const verifyAWSCredentials = require('../utils/verify-aws');
+
 const initializeDynamoDB = async () => {
     console.log('🔄 Initializing DynamoDB connection...'.yellow);
 
     try {
-        // First, validate environment
-        const requiredEnvVars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION'];
-        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+        // Verify AWS credentials first
+        const verificationResult = await verifyAWSCredentials();
         
-        if (missingVars.length > 0) {
-            console.warn(`⚠️ Missing environment variables: ${missingVars.join(', ')}`.yellow);
-            throw new Error('Missing required AWS credentials');
-        }
+        // If we get here, credentials are verified
+        const awsConfig = {
+            region: process.env.AWS_REGION || 'ap-south-1',
+            credentials: new AWS.Credentials({
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            })
+        };
 
         // Check if we should use local DynamoDB mode (for development without AWS credentials)
         const useLocalMode = process.env.USE_LOCAL_DB === 'true';
@@ -67,19 +72,30 @@ const initializeDynamoDB = async () => {
         console.log(`Region: ${region}`);
         console.log(`Access Key ID: ${accessKeyId.substring(0, 5)}...`);
 
-        // Configure AWS SDK with explicit credentials
-        AWS.config.update({
-            region: region,
+        // Configure AWS SDK with explicit credentials for Vercel environment
+        const config = {
+            region: process.env.AWS_REGION || 'ap-south-1',
             credentials: new AWS.Credentials({
-                accessKeyId: accessKeyId,
-                secretAccessKey: secretAccessKey
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
             }),
             maxRetries: 3,
             httpOptions: {
                 timeout: 5000,
                 connectTimeout: 3000
             }
+        };
+
+        // Log configuration (without sensitive data)
+        console.log('AWS Configuration:', {
+            region: config.region,
+            accessKeyId: `${config.accessKeyId.substr(0, 4)}...${config.accessKeyId.substr(-4)}`,
+            maxRetries: config.maxRetries,
+            httpOptions: config.httpOptions
         });
+
+        // Update AWS SDK configuration
+        AWS.config.update(config);
 
         // Initialize DynamoDB clients with custom configuration
         dynamoDB = new AWS.DynamoDB({
