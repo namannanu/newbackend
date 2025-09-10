@@ -16,11 +16,10 @@ const baseConfig = {
 
 // Only attach explicit credentials if access key and secret are present
 if (raw.accessKeyId && raw.secretAccessKey) {
-    const useSession = !!(raw.sessionToken && String(raw.accessKeyId).startsWith('ASIA'));
     baseConfig.credentials = new AWS.Credentials({
         accessKeyId: raw.accessKeyId,
         secretAccessKey: raw.secretAccessKey,
-        ...(useSession ? { sessionToken: raw.sessionToken } : {})
+        ...(raw.sessionToken ? { sessionToken: raw.sessionToken } : {})
     });
 }
 

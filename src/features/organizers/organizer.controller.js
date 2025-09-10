@@ -1,7 +1,17 @@
 const Organizer = require('./organizer.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
-const { initializeDynamoDB } = require('../../config/config');
+const AWS = require('aws-sdk');
+const dynamoDB = new AWS.DynamoDB.DocumentClient();
+
+// Initialize the DynamoDB table when the module is loaded
+(async () => {
+  try {
+    await Organizer.initTable();
+  } catch (error) {
+    console.error('Error initializing EventOrganiser table:', error);
+  }
+})();
 
 exports.getAllOrganizers = catchAsync(async (req, res, next) => {
   // Use scan operation for DynamoDB
@@ -10,8 +20,7 @@ exports.getAllOrganizers = catchAsync(async (req, res, next) => {
   };
 
   try {
-    const { documentClient } = await initializeDynamoDB();
-    const result = await documentClient.scan(params).promise();
+    const result = await dynamoDB.scan(params).promise();
     const organizers = result.Items || [];
 
     res.status(200).json({

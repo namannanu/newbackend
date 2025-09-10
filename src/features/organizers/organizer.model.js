@@ -1,4 +1,6 @@
-const { initializeDynamoDB } = require('../../config/config');
+const AWS = require('aws-sdk');
+const dynamoDB = new AWS.DynamoDB.DocumentClient();
+const dynamoDBRaw = new AWS.DynamoDB();
 
 const OrganizerModel = {
     tableName: 'EventOrganiser',
@@ -6,7 +8,6 @@ const OrganizerModel = {
     // Initialize table if it doesn't exist
     async initTable() {
         try {
-            const { dynamoDB: dynamoDBRaw } = await initializeDynamoDB();
             await dynamoDBRaw.describeTable({ TableName: this.tableName }).promise();
             console.log(`Table ${this.tableName} already exists`);
         } catch (error) {
@@ -112,8 +113,7 @@ const OrganizerModel = {
         };
 
         try {
-            const { documentClient } = await initializeDynamoDB();
-            await documentClient.put(params).promise();
+            await dynamoDB.put(params).promise();
             return params.Item;
         } catch (error) {
             if (error.code === 'ConditionalCheckFailedException') {
@@ -132,8 +132,7 @@ const OrganizerModel = {
             }
         };
 
-        const { documentClient } = await initializeDynamoDB();
-        const result = await documentClient.get(params).promise();
+        const result = await dynamoDB.get(params).promise();
         return result.Item;
     },
 
@@ -148,8 +147,7 @@ const OrganizerModel = {
             }
         };
 
-        const { documentClient } = await initializeDynamoDB();
-        const result = await documentClient.query(params).promise();
+        const result = await dynamoDB.query(params).promise();
         return result.Items[0]; // Return first matching organizer
     },
 
@@ -181,8 +179,7 @@ const OrganizerModel = {
             ReturnValues: 'ALL_NEW'
         };
 
-        const { documentClient } = await initializeDynamoDB();
-        const result = await documentClient.update(params).promise();
+        const result = await dynamoDB.update(params).promise();
         return result.Attributes;
     },
 
@@ -210,8 +207,7 @@ const OrganizerModel = {
             ReturnValues: 'ALL_NEW'
         };
 
-        const { documentClient } = await initializeDynamoDB();
-        const result = await documentClient.update(params).promise();
+        const result = await dynamoDB.update(params).promise();
         return result.Attributes;
     },
 
@@ -226,8 +222,7 @@ const OrganizerModel = {
             params.ExclusiveStartKey = lastEvaluatedKey;
         }
 
-        const { documentClient } = await initializeDynamoDB();
-        const result = await documentClient.scan(params).promise();
+        const result = await dynamoDB.scan(params).promise();
         return {
             items: result.Items,
             lastEvaluatedKey: result.LastEvaluatedKey
@@ -248,8 +243,7 @@ const OrganizerModel = {
             }
         };
 
-        const { documentClient } = await initializeDynamoDB();
-        const result = await documentClient.query(params).promise();
+        const result = await dynamoDB.query(params).promise();
         return result.Items;
     }
 };

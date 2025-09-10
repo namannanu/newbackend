@@ -13,12 +13,9 @@ const initializeDynamoDB = async () => {
 
     try {
         // Configure AWS credentials with session token support
-        const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim();
-        const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim();
-        const sessionToken = (process.env.AWS_SESSION_TOKEN || '').trim();
         const credentials = {
-            accessKeyId,
-            secretAccessKey
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
         };
 
         if (!credentials.accessKeyId || !credentials.secretAccessKey) {
@@ -26,14 +23,14 @@ const initializeDynamoDB = async () => {
         }
 
         // Add session token if available (required for Vercel/Lambda environment)
-        if (accessKeyId.startsWith('ASIA') && sessionToken) {
-            credentials.sessionToken = sessionToken;
-            console.log('✅ Using AWS session token (temporary credentials detected)'.green);
+        if (process.env.AWS_SESSION_TOKEN) {
+            credentials.sessionToken = process.env.AWS_SESSION_TOKEN;
+            console.log('✅ Using AWS session token for Vercel environment'.green);
         }
 
         // Configure AWS SDK
         const config = {
-            region: (process.env.AWS_REGION || 'ap-south-1').trim(),
+            region: process.env.AWS_REGION || 'ap-south-1',
             credentials: new AWS.Credentials(credentials),
             maxRetries: 3,
             httpOptions: { 
