@@ -20,8 +20,13 @@ dotenv.config({
 // Configure CORS
 const corsOptions = {
     origin: function (origin, callback) {
-        const allowedOrigins = ['http://localhost:8080', 'http://localhost:3000', 'http://localhost:5173'];
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        // Allow requests with no origin (like mobile apps, curl requests or same origin)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        // Check if the origin is allowed
+        if (origin.endsWith('.vercel.app')) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
@@ -33,23 +38,6 @@ const corsOptions = {
     preflightContinue: false,
     optionsSuccessStatus: 204,
     maxAge: 86400
-};
-
-app.use(cors(corsOptions));
-
-// Enable pre-flight requests for all routes
-app.options('*', cors(corsOptions));
-
-// Serve static files from the public directory
-app.use(express.static(path.join(__dirname, '..', 'public')));
-
-        if (isAllowed) return callback(null, true);
-        return callback(new Error(`Not allowed by CORS: ${origin}`));
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    credentials: true,
-    optionsSuccessStatus: 204
 };
 
 // Basic Middleware
