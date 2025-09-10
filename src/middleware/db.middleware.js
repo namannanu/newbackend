@@ -1,4 +1,4 @@
-const { initializeDynamoDB, dbOperations } = require('../../config/db');
+const { initializeDynamoDB, dbOperations } = require('../config/db');
 
 const attachDBMiddleware = async (req, res, next) => {
     try {
@@ -14,8 +14,11 @@ const attachDBMiddleware = async (req, res, next) => {
         console.error('❌ Database connection error:', error);
         res.status(500).json({
             success: false,
-            message: 'Database connection error',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            error: {
+                code: error.code || 'DATABASE_ERROR',
+                message: error.message,
+                details: error.stack
+            }
         });
     }
 };

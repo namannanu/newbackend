@@ -42,7 +42,7 @@ verifyAWSCredentials()
 
 
 // Import DB middleware
-const attachDBMiddleware = require('./shared/middlewares/attachDB');
+const { attachDBMiddleware } = require('./middleware/db.middleware');
 
 // Route logger middleware
 app.use((req, res, next) => {
