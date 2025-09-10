@@ -786,13 +786,38 @@ exports.deleteEmployee = catchAsync(async (req, res, next) => {
 
 // Get all employees
 exports.getAllEmployees = catchAsync(async (req, res, next) => {
-  const employees = await User.find({ role: 'employee' }).select('-password');
+  console.log('📊 Getting all employees...');
 
-  res.status(200).json({
-    status: 'success',
-    results: employees.length,
-    data: {
-      employees
+  try {
+    const params = {
+      TableName: 'Users',
+      FilterExpression: '#role = :roleValue',
+      ExpressionAttributeNames: {
+        '#role': 'role'
+      },
+      ExpressionAttributeValues: {
+        ':roleValue': 'employee'
+      }
+    };
+
+    console.log('🔍 Scanning Users table with params:', JSON.stringify(params, null, 2));
+    
+    const result = await dynamoDB.scan(params).promise();
+    const employees = result.Items || [];
+
+    // Remove sensitive information
+    const sanitizedEmployees = employees.map(emp => {
+      const { password, ...employeeWithoutPassword } = emp;
+      return employeeWithoutPassword;
+    });
+
+    console.log(`✅ Found ${sanitizedEmployees.length} employees`);
+
+    res.status(200).json({
+      status: 'success',
+      results: sanitizedEmployees.length,
+      data: {
+        employees: sanitizedEmployees
     }
   });
 });

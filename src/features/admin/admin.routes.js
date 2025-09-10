@@ -1,6 +1,7 @@
 const express = require('express');
 const adminController = require('./admin.controller');
 const authController = require('../auth/auth.controller');
+const employeeRoutes = require('./admin.employees.routes');
 
 const router = express.Router();
 
@@ -14,10 +15,7 @@ router.use(authController.restrictTo('admin'));
 router.get('/stats', adminController.getStats);
 
 // Employee management routes
-router.post('/employees', adminController.createEmployee);
-router.get('/employees', adminController.getAllEmployees);
-router.patch('/employees/permissions', adminController.updateEmployeePermissions);
-router.delete('/employees/:id', adminController.deleteEmployee);
+router.use('/employees', employeeRoutes);
 
 // Admin user management routes
 router.post('/admin-users', adminController.createAdminUser);
