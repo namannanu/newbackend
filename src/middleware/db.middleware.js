@@ -1,9 +1,9 @@
-const { initializeDynamoDB, dbOperations } = require('../config/db');
+const db = require('../config/db');
 
 const attachDBMiddleware = async (req, res, next) => {
     try {
         if (!req.db) {
-            const { dynamoDB, documentClient } = await initializeDynamoDB();
+            const { dynamoDB, documentClient } = await db.initializeDynamoDB();
             req.db = {
                 dynamoDB,
                 documentClient

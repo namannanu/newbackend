@@ -4,15 +4,14 @@ const colors = require('colors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
-const { initializeDynamoDB, dbOperations } = require('./config/db');
-const verifyAWSCredentials = require('./utils/verify-aws');
-const verifyRoutes = require('./features/aws/routes/verify.routes');
+const { initializeDynamoDB } = require('./config/config');
+const verifyAWSConnection = require('./utils/verifyAWSConnection');
 const path = require('path');
 
-
-// Initialize Express app first
+// Initialize Express app
 const app = express();
 
+// Load environment variables
 dotenv.config({
     path: path.join(__dirname, 'config', 'config.env'),
 });
@@ -28,34 +27,41 @@ const corsOptions = {
     credentials: true
 };
 
-// Verify AWS credentials on startup
-verifyAWSCredentials()
-    .then(() => {
-        console.log('\n✅ AWS credentials verified successfully on startup'.green);
-    })
-    .catch((error) => {
-        console.error('\n❌ AWS credential verification failed on startup:'.red);
-        console.error('Error:', error.message);
-        // Don't exit - let the app try to start anyway in case it's in local mode
-    });
-
-
-
-// Import DB middleware
-const { attachDBMiddleware } = require('./middleware/db.middleware');
+// Middleware
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
+app.use(morgan('dev'));
 
 // Route logger middleware
 app.use((req, res, next) => {
-  console.log(`📡 ${req.method} ${req.url}`);
-  next();
+    console.log(`📡 ${req.method} ${req.url}`);
+    next();
 });
 
 // Import routes
 const presignedUrlRoutes = require('./features/users/presigned-url.routes');
 
-// Middleware
-app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' })); 
+// Verify AWS connection and start server
+const startServer = async () => {
+    try {
+        // Verify AWS connection
+        await verifyAWSConnection();
+        console.log('✅ AWS connection verified successfully'.green);
+
+        // Start the server
+        const port = process.env.PORT || 3000;
+        app.listen(port, () => {
+            console.log(`� Server running on port ${port}`.green);
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:'.red, error.message);
+        process.exit(1);
+    }
+};
+
+// Start the server
+startServer();
 app.use(cookieParser());
 app.use(morgan('dev'));
 app.use(attachDBMiddleware);
