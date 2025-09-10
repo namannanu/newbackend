@@ -18,16 +18,27 @@ dotenv.config({
 });
 
 // Configure CORS
-app.use(cors({
-    origin: true, // Allow all origins
+const corsOptions = {
+    origin: function (origin, callback) {
+        const allowedOrigins = ['http://localhost:8080', 'http://localhost:3000', 'http://localhost:5173'];
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Content-Type', 'Date', 'X-Api-Version', 'Authorization'],
     credentials: true,
-    maxAge: 86400 // CORS preflight cache time in seconds
-}));
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+    maxAge: 86400
+};
 
-// Add OPTIONS handling for preflight requests
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Enable pre-flight requests for all routes
+app.options('*', cors(corsOptions));
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, '..', 'public')));
