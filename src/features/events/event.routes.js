@@ -18,6 +18,7 @@ router.route('/')
 router.route('/:id')
   .get(eventController.getEvent)
   .patch(authMiddleware.restrictTo('admin', 'organizer'), eventController.updateEvent)
+  .delete(authMiddleware.restrictTo('admin', 'organizer'), eventController.deleteEvent)
   .delete(authMiddleware.restrictTo('admin'), eventController.deleteEvent);
 
 module.exports = router;

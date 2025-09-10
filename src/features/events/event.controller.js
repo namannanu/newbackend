@@ -208,26 +208,70 @@ exports.updateEvent = catchAsync(async (req, res, next) => {
 });
 
 exports.deleteEvent = catchAsync(async (req, res, next) => {
-  // First get the event to check if it exists and get organizer info
-  const event = await Event.get(req.params.id);
+    console.log(`🎯 DELETE /api/events/${req.params.id} endpoint hit`);
+    
+    try {
+        // First get the event to check if it exists and get organizer info
+        const params = {
+            TableName: Event.tableName,
+            Key: {
+                eventId: req.params.id
+            }
+        };
 
-  if (!event) {
-    return next(new AppError('No event found with that ID', 404));
-  }
+        const result = await dynamoDB.get(params).promise();
+        const event = result.Item;
 
-  // Delete the event
-  await Event.delete(req.params.id);
+        if (!event) {
+            console.log(`❌ Event not found with ID: ${req.params.id}`);
+            return next(new AppError('No event found with that ID', 404));
+        }
 
-  // Update organizer stats
-  await Organizer.updateStats(event.organizerId, {
-    totalEvents: -1,
-    activeEvents: event.status === 'upcoming' ? -1 : 0
-  });
+        // Check user permissions
+        if (req.user.role !== 'admin' && event.organizerId !== req.user.id) {
+            console.log('❌ User does not have permission to delete this event');
+            return next(new AppError('You do not have permission to delete this event', 403));
+        }
 
-  res.status(204).json({
-    status: 'success',
-    data: null
-  });
+        // Delete the event
+        const deleteParams = {
+            TableName: Event.tableName,
+            Key: {
+                eventId: req.params.id
+            },
+            ReturnValues: 'ALL_OLD'
+        };
+
+        console.log('🗑️ Deleting event from DynamoDB...');
+        const deleteResult = await dynamoDB.delete(deleteParams).promise();
+
+        if (!deleteResult.Attributes) {
+            console.log('❌ Failed to delete event - no attributes returned');
+            return next(new AppError('Failed to delete event', 500));
+        }
+
+        // Try to update organizer stats
+        try {
+            await Organizer.updateStats(event.organizerId, {
+                totalEvents: -1,
+                activeEvents: event.status === 'upcoming' ? -1 : 0
+            });
+            console.log('✅ Organizer stats updated successfully');
+        } catch (statsError) {
+            console.error('⚠️ Failed to update organizer stats:', statsError);
+            // Continue even if stats update fails
+        }
+
+        console.log(`✅ Successfully deleted event: ${req.params.id}`);
+        res.status(200).json({
+            status: 'success',
+            message: 'Event deleted successfully',
+            data: deleteResult.Attributes
+        });
+    } catch (error) {
+        console.error('❌ Error in deleteEvent:', error);
+        return next(new AppError(`Failed to delete event: ${error.message}`, 500));
+    }
 });
 
 exports.getEventStats = async (req, res, next) => {
