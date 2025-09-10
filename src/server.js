@@ -17,6 +17,9 @@ dotenv.config({
     path: path.join(__dirname, 'config', 'config.env'),
 });
 
+// Serve static files from the public directory
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
 // CORS Configuration for Vercel deployment
 const corsOptions = {
     origin: process.env.VERCEL_URL ? [
