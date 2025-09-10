@@ -44,8 +44,20 @@ const initializeDynamoDB = async () => {
             sessionToken: process.env.AWS_SESSION_TOKEN // Optional
         };
 
+<<<<<<< ours
         // Validate AWS configuration
         AWSConfigValidator.validateCredentials(awsConfig);
+=======
+        const valid = AWSConfigValidator.validateCredentials(envConfig);
+
+        // Build final AWS SDK config; only include sessionToken if present
+        const sdkConfig = {
+            accessKeyId: valid.accessKeyId,
+            secretAccessKey: valid.secretAccessKey,
+            region: valid.region,
+            ...(valid.sessionToken ? { sessionToken: valid.sessionToken } : {})
+        };
+>>>>>>> theirs
 
         // Configure AWS SDK
         AWS.config.update(awsConfig);

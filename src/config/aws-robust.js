@@ -1,19 +1,23 @@
 const AWS = require('aws-sdk');
 
-// Build robust AWS configuration from environment (trim values, optional session token)
-const raw = {
-    accessKeyId: (process.env.AWS_ACCESS_KEY_ID || '').trim() || undefined,
-    secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY || '').trim() || undefined,
-    sessionToken: (process.env.AWS_SESSION_TOKEN || '').trim() || undefined,
-    region: (process.env.AWS_REGION || 'ap-south-1').trim()
-};
-
-const baseConfig = {
-    region: raw.region,
+// AWS Configuration with credentials
+const awsConfig = {
+    region: process.env.AWS_REGION || 'ap-south-1',
+    credentials: new AWS.Credentials({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }),
     maxRetries: 3,
-    httpOptions: { timeout: 5000, connectTimeout: 3000 }
+    httpOptions: {
+        timeout: 5000,
+        connectTimeout: 3000
+    }
 };
 
+<<<<<<< ours
+// Configure AWS SDK
+AWS.config.update(awsConfig);
+=======
 // Only attach explicit credentials if access key and secret are present
 if (raw.accessKeyId && raw.secretAccessKey) {
     baseConfig.credentials = new AWS.Credentials({
@@ -22,16 +26,18 @@ if (raw.accessKeyId && raw.secretAccessKey) {
         ...(raw.sessionToken ? { sessionToken: raw.sessionToken } : {})
     });
 }
+>>>>>>> theirs
 
-AWS.config.update(baseConfig);
+// Add logging for credential loading
+const credentialsCallback = (err) => {
+    if (err) {
+        console.error('❌ Error loading credentials:', err.message);
+    } else {
+        console.log('✅ AWS credentials loaded successfully');
+    }
+};
 
-// Safe log
-console.log('AWS (robust) configured:', {
-    region: baseConfig.region,
-    accessKeyId: raw.accessKeyId ? `${raw.accessKeyId.slice(0, 4)}...${raw.accessKeyId.slice(-4)}` : 'not set',
-    hasSecretKey: !!raw.secretAccessKey,
-    hasSessionToken: !!raw.sessionToken
-});
+AWS.config.getCredentials(credentialsCallback);
 
 // Initialize AWS services
 const s3 = new AWS.S3();
