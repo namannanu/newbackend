@@ -20,11 +20,12 @@
   "author": "daksh",
   "license": "MIT",
   "devDependencies": {
-    "colors": "^1.4.0",
-    "morgan": "^1.10.0",
     "nodemon": "^3.1.9"
   },
   "dependencies": {
+    "aws-sdk": "^2.1692.0",
+    "colors": "^1.4.0",
+    "morgan": "^1.10.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.859.0",
     "@aws-sdk/client-dynamodb": "^3.859.0",
     "@aws-sdk/client-rekognition": "^3.859.0",
