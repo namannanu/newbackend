@@ -1,41 +1,128 @@
 // AWS SDK configuration with serverless compatibility
 const AWS = require('aws-sdk');
+const colors = require('colors');
+
+// Log AWS SDK version for debugging
+console.log('AWS SDK Version:', AWS.VERSION);
+
+function sanitizeLogValue(value) {
+    if (!value) return 'not set';
+    return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+
+function logCredentials() {
+    console.log('\n📝 AWS Credentials Status:'.cyan);
+    console.log('Region:', process.env.AWS_REGION || 'ap-south-1');
+    console.log('Access Key:', sanitizeLogValue(process.env.AWS_ACCESS_KEY_ID));
+    console.log('Secret Key:', process.env.AWS_SECRET_ACCESS_KEY ? '[PRESENT]' : 'not set');
+    console.log('Session Token:', process.env.AWS_SESSION_TOKEN ? '[PRESENT]' : 'not set');
+}
 
 function getAWSConfig() {
-    // Base configuration
+    // Log current credentials for debugging
+    logCredentials();
+
+    // Base configuration with better timeout and retry settings
     const config = {
         region: process.env.AWS_REGION || 'ap-south-1',
         maxRetries: 3,
-        httpOptions: { timeout: 5000 }, // 5 second timeout
+        retryDelayOptions: { base: 200 },
+        httpOptions: { 
+            timeout: 5000,
+            connectTimeout: 3000
+        }
     };
 
-    // Add credentials if they exist in environment
-    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-        config.credentials = new AWS.Credentials({
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        });
-        
-        // If session token is provided (common in Lambda/Vercel environment)
+    try {
+        // Vercel/Lambda environment with temporary credentials
         if (process.env.AWS_SESSION_TOKEN) {
-            config.credentials.sessionToken = process.env.AWS_SESSION_TOKEN;
+            config.credentials = new AWS.Credentials({
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+                sessionToken: process.env.AWS_SESSION_TOKEN
+            });
+            console.log('✅ Using temporary credentials with session token'.green);
         }
+        // Standard environment with permanent credentials
+        else if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+            config.credentials = new AWS.Credentials({
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            });
+            console.log('✅ Using permanent credentials'.green);
+        }
+        // Development fallback
+        else if (process.env.NODE_ENV === 'development') {
+            console.log('⚠️  No AWS credentials found, using development defaults'.yellow);
+            config.credentials = new AWS.Credentials({
+                accessKeyId: 'local',
+                secretAccessKey: 'local'
+            });
+            config.endpoint = 'http://localhost:8000';
+        }
+        else {
+            throw new Error('No valid AWS credentials found');
+        }
+    } catch (error) {
+        console.error('❌ Error configuring AWS credentials:'.red, error.message);
+        throw error;
     }
 
     return config;
 }
 
-// Initialize AWS clients with retry logic
+async function verifyAWSCredentials() {
+    const sts = new AWS.STS(getAWSConfig());
+    
+    try {
+        console.log('\n🔍 Verifying AWS credentials...'.cyan);
+        const identity = await sts.getCallerIdentity().promise();
+        
+        console.log('✅ AWS Credentials Verified:'.green);
+        console.log('Account:', identity.Account);
+        console.log('User ID:', identity.UserId);
+        console.log('ARN:', identity.Arn);
+        
+        // Test DynamoDB access specifically
+        const dynamoDB = new AWS.DynamoDB(getAWSConfig());
+        await dynamoDB.listTables().promise();
+        console.log('✅ DynamoDB access verified'.green);
+        
+        return { success: true, identity };
+    } catch (error) {
+        console.error('❌ AWS Credential Verification Failed:'.red);
+        console.error('Error Code:', error.code);
+        console.error('Error Message:', error.message);
+        
+        if (error.code === 'InvalidClientTokenId' || error.code === 'UnrecognizedClientException') {
+            console.error('\n⚠️  Potential solutions:'.yellow);
+            console.error('1. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in Vercel');
+            console.error('2. Ensure AWS_SESSION_TOKEN is set in Vercel');
+            console.error('3. Verify credentials have not expired');
+            console.error('4. Check IAM user/role permissions');
+            console.error('5. Remove any whitespace from credentials');
+            console.error('\nTo update credentials in Vercel:');
+            console.error('1. Run: vercel env add AWS_ACCESS_KEY_ID');
+            console.error('2. Run: vercel env add AWS_SECRET_ACCESS_KEY');
+            console.error('3. Run: vercel env add AWS_SESSION_TOKEN');
+            console.error('4. Run: vercel --prod');
+        }
+        
+        return { success: false, error };
+    }
+}
+
+// Initialize AWS clients with retry logic and better error handling
 function createAWSClient(ClientClass, config = getAWSConfig()) {
     const client = new ClientClass(config);
 
-    // Add error logging
+    // Add detailed error logging
     const originalSend = client.makeRequest;
     client.makeRequest = function(operation, params) {
         const request = originalSend.call(this, operation, params);
         
         request.on('error', (err) => {
-            console.error(`AWS ${ClientClass.name} Error:`, {
+            console.error(`❌ AWS ${ClientClass.name} Error:`.red, {
                 operation,
                 errorCode: err.code,
                 message: err.message,
@@ -44,6 +131,11 @@ function createAWSClient(ClientClass, config = getAWSConfig()) {
                 time: new Date().toISOString()
             });
         });
+
+        return request;
+    };
+
+    return client;
 
         return request;
     };
