@@ -1,0 +1,241 @@
+{
+  "info": {
+    "_postman_id": "8e2f3f8a-3d8e-4b60-9a7f-7a8fb7f9c0a1",
+    "name": "final",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://newbackend-self.vercel.app" },
+    { "key": "userToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "userId", "value": "usr_sample_001" },
+    { "key": "eventId", "value": "evt_sample_001" },
+    { "key": "organizerId", "value": "org_sample_001" },
+    { "key": "registrationId", "value": "reg_sample_001" },
+    { "key": "ticketId", "value": "tkt_sample_001" },
+    { "key": "resetToken", "value": "paste-reset-token-here" },
+    { "key": "diagToken", "value": "" },
+    { "key": "adminEmail", "value": "admin@example.com" },
+    { "key": "adminPassword", "value": "pass1234" },
+    { "key": "email", "value": "user@example.com" },
+    { "key": "password", "value": "pass1234" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /",
+          "request": { "method": "GET", "url": "{{baseUrl}}/" },
+          "response": []
+        },
+        {
+          "name": "GET /api/health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/health" },
+          "response": []
+        },
+        {
+          "name": "GET /api/health-check",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/health-check" },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /api/auth/register (signup alias)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"fullName\": \"Sample User\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/auth/signup",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"fullName\": \"Sample User\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/signup"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "try { var json = pm.response.json(); if (json && json.token) { pm.collectionVariables.set('userToken', json.token); } } catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/auth/admin-login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "try { var json = pm.response.json(); if (json && json.token) { pm.collectionVariables.set('adminToken', json.token); } } catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/admin-login"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/auth/validate-token",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+            "url": "{{baseUrl}}/api/auth/validate-token"
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /api/auth/updateMyPassword",
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" }, {"key":"Content-Type","value":"application/json"} ],
+            "body": { "mode": "raw", "raw": "{\n  \"passwordCurrent\": \"{{password}}\",\n  \"password\": \"newPass123!\",\n  \"passwordConfirm\": \"newPass123!\"\n}" },
+            "url": "{{baseUrl}}/api/auth/updateMyPassword"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users (admin)",
+      "item": [
+        {
+          "name": "GET /api/users",
+          "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/users" },
+          "response": []
+        },
+        { "name": "GET /api/users/{{userId}}", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/users/{{userId}}" }, "response": [] },
+        { "name": "PATCH /api/users/{{userId}}", "request": { "method": "PATCH", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"status\": \"active\"\n}"}, "url": "{{baseUrl}}/api/users/{{userId}}" }, "response": [] },
+        { "name": "DELETE /api/users/{{userId}}", "request": { "method": "DELETE", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/users/{{userId}}" }, "response": [] },
+        { "name": "POST /api/users/{{userId}}/verify-face", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{userId}}\",\n  \"uploadedPhoto\": \"path/in/s3.jpg\",\n  \"aadhaarPhoto\": \"path/in/s3.jpg\"\n}"}, "url": "{{baseUrl}}/api/users/{{userId}}/verify-face" }, "response": [] },
+        { "name": "GET /api/users/userdetails (as user)", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/users/userdetails" }, "response": [] },
+        { "name": "GET /api/users/presigned-urls/{{userId}}", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/users/presigned-urls/{{userId}}" }, "response": [] }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        { "name": "GET /api/events", "request": { "method": "GET", "url": "{{baseUrl}}/api/events" }, "response": [] },
+        { "name": "GET /api/events/stats", "request": { "method": "GET", "url": "{{baseUrl}}/api/events/stats" }, "response": [] },
+        { "name": "POST /api/events", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"name\": \"Sample Event\",\n  \"organizerId\": \"{{organizerId}}\",\n  \"date\": \"2025-12-01\",\n  \"ticketPrice\": 10,\n  \"totalTickets\": 100\n}"}, "url": "{{baseUrl}}/api/events" }, "response": [] },
+        { "name": "GET /api/events/{{eventId}}", "request": { "method": "GET", "url": "{{baseUrl}}/api/events/{{eventId}}" }, "response": [] },
+        { "name": "PATCH /api/events/{{eventId}}", "request": { "method": "PATCH", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"name\": \"Updated Event\"\n}"}, "url": "{{baseUrl}}/api/events/{{eventId}}" }, "response": [] },
+        { "name": "DELETE /api/events/{{eventId}}", "request": { "method": "DELETE", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/events/{{eventId}}" }, "response": [] }
+      ]
+    },
+    {
+      "name": "Organizers",
+      "item": [
+        { "name": "GET /api/organizers", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/organizers" }, "response": [] },
+        { "name": "POST /api/organizers", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"name\": \"Org Name\",\n  \"email\": \"org@example.com\",\n  \"phone\": \"+1-555-0000\",\n  \"address\": \"Address\",\n  \"contactPerson\": \"Person\"\n}"}, "url": "{{baseUrl}}/api/organizers" }, "response": [] },
+        { "name": "GET /api/organizers/{{organizerId}}", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/organizers/{{organizerId}}" }, "response": [] },
+        { "name": "PATCH /api/organizers/{{organizerId}}", "request": { "method": "PATCH", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"status\": \"active\"\n}"}, "url": "{{baseUrl}}/api/organizers/{{organizerId}}" }, "response": [] },
+        { "name": "DELETE /api/organizers/{{organizerId}}", "request": { "method": "DELETE", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/organizers/{{organizerId}}" }, "response": [] }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        { "name": "GET /api/tickets", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/tickets" }, "response": [] },
+        { "name": "POST /api/tickets", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"eventId\": \"{{eventId}}\",\n  \"userId\": \"{{userId}}\"\n}"}, "url": "{{baseUrl}}/api/tickets" }, "response": [] },
+        { "name": "GET /api/tickets/{{ticketId}}", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/tickets/{{ticketId}}" }, "response": [] },
+        { "name": "PATCH /api/tickets/{{ticketId}}", "request": { "method": "PATCH", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"status\": \"used\"\n}"}, "url": "{{baseUrl}}/api/tickets/{{ticketId}}" }, "response": [] },
+        { "name": "POST /api/tickets/verify", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"ticketId\": \"{{ticketId}}\"\n}"}, "url": "{{baseUrl}}/api/tickets/verify" }, "response": [] },
+        { "name": "GET /api/tickets/event/{{eventId}}", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/tickets/event/{{eventId}}" }, "response": [] }
+      ]
+    },
+    {
+      "name": "Feedback",
+      "item": [
+        { "name": "GET /api/feedback", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/feedback" }, "response": [] },
+        { "name": "POST /api/feedback", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"message\": \"Great event!\",\n  \"rating\": 5\n}"}, "url": "{{baseUrl}}/api/feedback" }, "response": [] },
+        { "name": "GET /api/feedback/{{ticketId}}", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"} ], "url": "{{baseUrl}}/api/feedback/{{ticketId}}" }, "response": [] },
+        { "name": "PATCH /api/feedback/{{ticketId}}", "request": { "method": "PATCH", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"message\": \"Updated feedback\"\n}"}, "url": "{{baseUrl}}/api/feedback/{{ticketId}}" }, "response": [] },
+        { "name": "PATCH /api/feedback/{{ticketId}}/review", "request": { "method": "PATCH", "header": [ {"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"reviewed\": true\n}"}, "url": "{{baseUrl}}/api/feedback/{{ticketId}}/review" }, "response": [] }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        { "name": "GET /api/admin/stats", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/admin/stats" }, "response": [] },
+        { "name": "GET /api/admin/admin-users", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/admin/admin-users" }, "response": [] },
+        { "name": "POST /api/admin/admin-users", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"email\": \"newadmin@example.com\",\n  \"password\": \"Passw0rd!\",\n  \"name\": \"New Admin\"\n}"}, "url": "{{baseUrl}}/api/admin/admin-users" }, "response": [] },
+        { "name": "POST /api/admin/register (protected)", "request": { "method": "POST", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"email\": \"anotheradmin@example.com\",\n  \"password\": \"Passw0rd!\",\n  \"name\": \"Another Admin\"\n}"}, "url": "{{baseUrl}}/api/admin/register" }, "response": [] },
+        { "name": "GET /api/admin/users/{{userId}}/face-data", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/admin/users/{{userId}}/face-data" }, "response": [] },
+        { "name": "GET /api/admin/employees", "request": { "method": "GET", "header": [ {"key":"Authorization","value":"Bearer {{adminToken}}"} ], "url": "{{baseUrl}}/api/admin/employees" }, "response": [] }
+      ]
+    },
+    {
+      "name": "Registrations",
+      "item": [
+        { "name": "GET /api/registrations", "request": { "method": "GET", "url": "{{baseUrl}}/api/registrations" }, "response": [] },
+        { "name": "POST /api/registrations", "request": { "method": "POST", "header": [ {"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{userId}}\",\n  \"eventId\": \"{{eventId}}\"\n}"}, "url": "{{baseUrl}}/api/registrations" }, "response": [] },
+        { "name": "GET /api/registrations/stats", "request": { "method": "GET", "url": "{{baseUrl}}/api/registrations/stats" }, "response": [] },
+        { "name": "GET /api/registrations/status/pending", "request": { "method": "GET", "url": "{{baseUrl}}/api/registrations/status/pending" }, "response": [] },
+        { "name": "GET /api/registrations/event/{{eventId}}", "request": { "method": "GET", "url": "{{baseUrl}}/api/registrations/event/{{eventId}}" }, "response": [] },
+        { "name": "GET /api/registrations/user/{{userId}}", "request": { "method": "GET", "url": "{{baseUrl}}/api/registrations/user/{{userId}}" }, "response": [] },
+        { "name": "GET /api/registrations/{{registrationId}}", "request": { "method": "GET", "url": "{{baseUrl}}/api/registrations/{{registrationId}}" }, "response": [] },
+        { "name": "PUT /api/registrations/{{registrationId}}", "request": { "method": "PUT", "header": [ {"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"status\": \"verified\"\n}"}, "url": "{{baseUrl}}/api/registrations/{{registrationId}}" }, "response": [] },
+        { "name": "DELETE /api/registrations/{{registrationId}}", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/registrations/{{registrationId}}" }, "response": [] },
+        { "name": "PUT /api/registrations/{{registrationId}}/checkin", "request": { "method": "PUT", "url": "{{baseUrl}}/api/registrations/{{registrationId}}/checkin" }, "response": [] },
+        { "name": "PUT /api/registrations/{{registrationId}}/face-verification/start", "request": { "method": "PUT", "url": "{{baseUrl}}/api/registrations/{{registrationId}}/face-verification/start" }, "response": [] },
+        { "name": "PUT /api/registrations/{{registrationId}}/face-verification/complete", "request": { "method": "PUT", "url": "{{baseUrl}}/api/registrations/{{registrationId}}/face-verification/complete" }, "response": [] },
+        { "name": "PUT /api/registrations/{{registrationId}}/issue-ticket", "request": { "method": "PUT", "url": "{{baseUrl}}/api/registrations/{{registrationId}}/issue-ticket" }, "response": [] },
+        { "name": "PUT /api/registrations/{{registrationId}}/admin-override", "request": { "method": "PUT", "header": [ {"key":"Content-Type","value":"application/json"} ], "body": {"mode":"raw","raw":"{\n  \"reason\": \"Manual approval for edge case\"\n}"}, "url": "{{baseUrl}}/api/registrations/{{registrationId}}/admin-override" }, "response": [] }
+      ]
+    },
+    {
+      "name": "AWS Diagnostics",
+      "item": [
+        {
+          "name": "GET /api/aws/diag",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/aws/diag?token={{diagToken}}"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
+
