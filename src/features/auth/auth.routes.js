@@ -5,6 +5,8 @@ const adminController = require('../admin/admin.controller');
 const router = express.Router();
 
 router.post('/signup', authController.signup);
+// Alias commonly used by clients
+router.post('/register', authController.signup);
 router.post('/login', authController.login);
 router.post('/admin-login', authController.adminLogin);
 

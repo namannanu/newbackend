@@ -129,14 +129,9 @@ app.use((req, res, next) => {
     });
 });
 
-// Error handling middleware (must be last)
-app.use((err, req, res, next) => {
-    console.error('❌ Error:'.red, err.message);
-    res.status(err.status || 500).json({
-        success: false,
-        error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
-    });
-});
+// Use centralized error handler that reports operational messages in production
+const globalErrorHandler = require('./shared/middlewares/error.middleware');
+app.use(globalErrorHandler);
 
 // Initialize application
 const initializeApp = async () => {
