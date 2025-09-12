@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const colors = require('colors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
@@ -20,53 +19,7 @@ dotenv.config({
 // Serve static files (if any)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// CORS: allow localhost in dev (or when explicitly enabled) and Vercel domains in prod
-const devOrigins = [
-  'http://localhost:8080',
-  'http://127.0.0.1:8080',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
-];
-
-const prodOrigins = [
-  'https://newbackend-self.vercel.app'
-];
-if (process.env.VERCEL_URL) {
-  prodOrigins.push(`http://localhost:8080`);
-}
-
-const isProdEnv = (process.env.NODE_ENV === 'production') || (process.env.VERCEL_ENV === 'production');
-const includeLocal = !isProdEnv || process.env.ALLOW_LOCALHOST_CORS === 'true';
-const allowedOrigins = [
-  ...prodOrigins,
-  ...(includeLocal ? devOrigins : [])
-];
-const vercelSubdomainRegex = /^https:\/\/([a-z0-9-]+)\.vercel\.app$/i;
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-
-    const isAllowed =
-      allowedOrigins.includes(origin) || vercelSubdomainRegex.test(origin);
-
-    if (isAllowed) return callback(null, true);
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
-  },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-  maxAge: 86400
-};
-
 // Basic Middleware
-app.use(cors(corsOptions));
-// Explicitly handle preflight for all routes (esp. on serverless)
-app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(morgan('dev'));
