@@ -43,6 +43,7 @@ const registrationRoutes = require('./features/registrations/userEventRegistrati
 const userRoutes = require('./features/users/user.routes');
 const authRoutes = require('./features/auth/auth.routes');
 const awsDiagRoutes = require('./features/aws/routes/diag.routes');
+const amplifyRoutes = require('./features/aws/routes/amplify');
 
 // Root route - Vercel status
 app.get('/', (req, res) => {
@@ -84,6 +85,7 @@ app.use('/api/users', userRoutes);
 // Backward-compat: some clients call /api/user (singular)
 app.use('/api/user', userRoutes);
 app.use('/api/aws', awsDiagRoutes);
+app.use('/api/uploadedpic', amplifyRoutes);
 
 // 404 handler
 app.use((req, res, next) => {
