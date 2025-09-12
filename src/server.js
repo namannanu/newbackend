@@ -34,7 +34,7 @@ const prodOrigins = [
   'https://newbackend-self.vercel.app'
 ];
 if (process.env.VERCEL_URL) {
-  prodOrigins.push(`https://${process.env.VERCEL_URL}`);
+  prodOrigins.push(`http://localhost:8080`);
 }
 
 const isProdEnv = (process.env.NODE_ENV === 'production') || (process.env.VERCEL_ENV === 'production');
