@@ -3,10 +3,16 @@ const jwt = require("jsonwebtoken");
 const AWS = require('aws-sdk');
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is not set');
-}
+// Do not throw at import time; validate when needed so modules can load in dev/test
+const requireJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    const err = new Error('JWT_SECRET environment variable is not set');
+    err.name = 'ConfigError';
+    throw err;
+  }
+  return secret;
+};
 
 // 🔑 Login Service
 async function login(email, password) {
@@ -39,7 +45,7 @@ async function login(email, password) {
       email: user.email,
       role: "admin",
     },
-    JWT_SECRET,
+    requireJwtSecret(),
     { expiresIn: "1d" }
   );
 
