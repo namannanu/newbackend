@@ -20,17 +20,29 @@ dotenv.config({
 // Serve static files (if any)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// CORS: allow localhost in dev and vercel domains in prod
+// CORS: allow localhost in dev (or when explicitly enabled) and Vercel domains in prod
 const devOrigins = [
-  'https://newbackend-self.vercel.app'
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
 ];
 
-const prodOrigins = [];
+const prodOrigins = [
+  'https://newbackend-self.vercel.app'
+];
 if (process.env.VERCEL_URL) {
   prodOrigins.push(`https://${process.env.VERCEL_URL}`);
 }
 
-const allowedOrigins = [...devOrigins, ...prodOrigins];
+const isProdEnv = (process.env.NODE_ENV === 'production') || (process.env.VERCEL_ENV === 'production');
+const includeLocal = !isProdEnv || process.env.ALLOW_LOCALHOST_CORS === 'true';
+const allowedOrigins = [
+  ...prodOrigins,
+  ...(includeLocal ? devOrigins : [])
+];
 const vercelSubdomainRegex = /^https:\/\/([a-z0-9-]+)\.vercel\.app$/i;
 
 const corsOptions = {
