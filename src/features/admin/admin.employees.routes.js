@@ -10,7 +10,10 @@ router.use(authMiddleware.protect);
 // Apply admin check to all routes
 router.use(authMiddleware.restrictTo('admin'));
 
-// GET /api/admin/employees - Get all employees
+// GET /api/admin/employees - List employees
 router.get('/', employeeController.getAllEmployees);
+// POST /api/admin/employees - Create employee
+router.post('/', employeeController.createEmployee);
+
 
 module.exports = router;
