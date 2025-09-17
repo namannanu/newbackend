@@ -304,7 +304,7 @@ router.delete("/delete", verifyToken, async (req, res) => {
         if (!userUploads.has(userId)) {
             return res.status(404).json({
                 success: false,
-                message: "No image found for this user"
+                message: "No image found for this user" 
             });
         }
 

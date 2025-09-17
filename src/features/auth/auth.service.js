@@ -49,17 +49,7 @@ const createSendToken = async (user, statusCode, res) => {
   // Check if user has face image in the faceimage table
   console.log(`Checking if user ${user.userId} has face image records`);
   
-  let hasFaceImage = false;
   
-  // Check the faceimage table to see if user has any face records
-  try {
-    hasFaceImage = await User.hasFaceImageForUser(user.userId);
-    console.log(`Face image record exists for user ${user.userId}: ${hasFaceImage}`);
-  } catch (error) {
-    console.error(`Error checking faceimage presence for user ${user.userId}:`, error);
-  }
-  
-  console.log(`User ${user.userId} hasFaceImage: ${hasFaceImage}`);
 
   // Create user response without sensitive data
   const userResponse = {
@@ -69,7 +59,6 @@ const createSendToken = async (user, statusCode, res) => {
     email: user.email,
     role: user.role || "user",
     permissions: user.permissions || [],
-    hasFaceImage: hasFaceImage, // Boolean indicating if user has face image records
     verificationStatus: user.verificationStatus || "pending",
     status: user.status || "active",
     uploadedPhoto: user.avatar || user.uploadedPhoto || null,

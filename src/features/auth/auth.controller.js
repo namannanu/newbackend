@@ -42,3 +42,66 @@ exports.validateToken = catchAsync(async (req, res, next) => {
     }
   });
 });
+
+
+// Remove face data from a user
+exports.checkFaceId = catchAsync(async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return next(new AppError('User ID is required', 400));
+    }
+    
+    // First check if user exists
+    const user = await UserModel.get(userId);
+    
+    if (!user) {
+      return next(new AppError(`No user found with ID: ${userId}`, 404));
+    }
+    
+    // Check if user has face image entries in faceimage table
+    const hasFaceImage = await UserModel.hasFaceImageForUser(userId);
+    
+    // If there's no face image, there's nothing to do
+    if (!hasFaceImage) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'User has no face image data to remove',
+        data: {
+          user: {
+            userId: user.userId,
+            fullName: user.fullName,
+            email: user.email,
+            hasFaceImage: false,
+            verificationStatus: user.verificationStatus
+          }
+        }
+      });
+    }
+    
+    // TODO: If needed, implement actual deletion of face image records from faceimage table
+    // This would require a new method in UserModel to delete face image records
+    // For now, we just report the current status
+    
+    // Log the action for audit purposes
+    console.log(`Admin ${req.user.userId} checked face data for user ${userId} at ${new Date().toISOString()}`);
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'User has face image data that requires manual removal from faceimage table',
+      data: {
+        user: {
+          userId: user.userId,
+          fullName: user.fullName,
+          email: user.email,
+          hasFaceImage: true,
+          verificationStatus: user.verificationStatus
+        }
+      }
+    });
+  } catch (error) {
+    console.error(`Error checking face data: ${error.message}`);
+    return next(new AppError('Failed to check face data', 500));
+  }
+});
