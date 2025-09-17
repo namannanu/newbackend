@@ -1,5 +1,7 @@
 
 const catchAsync = require('../../shared/utils/catchAsync');
+const AppError = require('../../shared/utils/appError');
+const UserModel = require('../users/user.model');
 const authService = require('./auth.service');
 const { createSendToken } = require('./auth.service');
 
