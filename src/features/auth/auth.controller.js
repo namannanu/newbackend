@@ -11,14 +11,16 @@ exports.signup = catchAsync(async (req, res, next) => {
 });
 
 exports.login = catchAsync(async (req, res, next) => {
-  const { email, password } = req.body;
-  const user = await authService.login(email, password);
+  const { email, username, password } = req.body;
+  const identifier = email || username;
+  const user = await authService.login(identifier, password);
   await createSendToken(user, 200, res);
 });
 
 exports.adminLogin = catchAsync(async (req, res, next) => {
-  const { email, password } = req.body;
-  const user = await authService.login(email, password, true);
+  const { email, username, password } = req.body;
+  const identifier = email || username;
+  const user = await authService.login(identifier, password, true);
   await createSendToken(user, 200, res);
 });
 
@@ -104,4 +106,3 @@ exports.checkFaceId = catchAsync(async (req, res, next) => {
     return next(new AppError('Failed to check face data', 500));
   }
 });
-

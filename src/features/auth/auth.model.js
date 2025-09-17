@@ -15,21 +15,38 @@ const requireJwtSecret = () => {
 };
 
 // 🔑 Login Service
-async function login(email, password) {
+async function login(identifier, password) {
+  if (!identifier || !password) {
+    throw new Error('Identifier and password are required');
+  }
+
+  const trimmedIdentifier = identifier.trim();
+  const normalizedIdentifier = trimmedIdentifier.toLowerCase();
+
   // Use scan instead of query since EmailIndex doesn't exist
   const params = {
     TableName: 'AdminUsers',
-    FilterExpression: 'email = :email',
+    FilterExpression:
+      'email = :normalizedIdentifier OR #username = :normalizedIdentifier OR #username = :identifierExact',
+    ExpressionAttributeNames: {
+      '#username': 'username'
+    },
     ExpressionAttributeValues: {
-      ':email': email.toLowerCase()
+      ':normalizedIdentifier': normalizedIdentifier,
+      ':identifierExact': trimmedIdentifier
     }
   };
-  
+
   const result = await dynamoDB.scan(params).promise();
-  const user = result.Items[0];
-  
+  const user = (result.Items || []).find((item) => {
+    if (!item) return false;
+    const emailMatch = item.email && item.email.toLowerCase() === normalizedIdentifier;
+    const usernameMatch = item.username && item.username.toLowerCase() === normalizedIdentifier;
+    return emailMatch || usernameMatch;
+  });
+
   if (!user) {
-    throw new Error("Invalid user");
+    throw new Error('Invalid user');
   }
 
   // check password
@@ -66,6 +83,8 @@ async function login(email, password) {
   };
   await dynamoDB.update(updateParams).promise();
 
+  const fullName = user.fullName || user.name || user.username || '';
+
   // Format the response
   return {
     status: "success",
@@ -73,7 +92,7 @@ async function login(email, password) {
     data: {
       user: {
         userId: user.userId,
-        name: user.name || user.username,
+        fullName,
         email: user.email,
         role: user.role || "user",
         permissions: user.permissions || [],

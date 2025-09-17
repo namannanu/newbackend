@@ -52,10 +52,10 @@ const createSendToken = async (user, statusCode, res) => {
   
 
   // Create user response without sensitive data
+  const fullName = user.fullName || user.name || user.username || '';
   const userResponse = {
     userId: user.userId,
-    fullName: user.name || user.username || '',
-    name: user.name || user.username || '',
+    fullName,
     email: user.email,
     role: user.role || "user",
     permissions: user.permissions || [],
@@ -120,44 +120,56 @@ const signup = async (userObj) => {
 };
 
 
-const login = async (email, password, isAdminLogin = false) => {
+const login = async (identifier, password, isAdminLogin = false) => {
   try {
-    // 1) Check if email and password exist
-    if (!email || !password) {
-      throw new AppError('Please provide email and password!', 400);
+    // 1) Check if identifier and password exist
+    if (!identifier || !password) {
+      throw new AppError('Please provide an email/username and password!', 400);
     }
 
     // 2) Check if user exists
     let user;
+    const searchValue = identifier.trim();
+    const normalizedSearchValue = searchValue.toLowerCase();
     
     if (isAdminLogin) {
       // Admin login - only check AdminUsers table
       const params = {
         TableName: 'AdminUsers',
-        FilterExpression: 'email = :email',
+        FilterExpression:
+          'email = :normalizedIdentifier OR #username = :normalizedIdentifier OR #username = :identifierExact',
+        ExpressionAttributeNames: {
+          '#username': 'username'
+        },
         ExpressionAttributeValues: {
-          ':email': email.toLowerCase()
+          ':normalizedIdentifier': normalizedSearchValue,
+          ':identifierExact': searchValue
         }
       };
     
-      console.log('Searching for admin with email:', email);
+      console.log('Searching for admin with identifier:', identifier);
       const { documentClient } = await initializeDynamoDB();
       const result = await documentClient.scan(params).promise();
       console.log('Scan result:', JSON.stringify(result, null, 2));
-      user = result.Items[0];
+      user = (result.Items || []).find((item) => {
+        if (!item) return false;
+        const emailMatch = item.email && item.email.toLowerCase() === normalizedSearchValue;
+        const usernameMatch = item.username && item.username.toLowerCase() === normalizedSearchValue;
+        return emailMatch || usernameMatch;
+      });
       
       if (!user) {
-        console.log('No admin user found with email:', email);
+        console.log('No admin user found with identifier:', identifier);
         throw new AppError('Invalid email or password', 401);
       }
       console.log('Found admin user:', { ...user, password: '[REDACTED]' });
     } else {
       // Regular user login - use the User model's findByEmail method which is properly configured
-      console.log('Searching for user with email:', email);
-      user = await User.findByEmail(email);
+      console.log('Searching for user with identifier:', identifier);
+      user = await User.findByEmail(identifier);
       
       if (!user) {
-        console.log('No user found with email:', email);
+      console.log('No user found with identifier:', identifier);
         throw new AppError('Invalid email or password', 401);
       }
       console.log('Found user:', { ...user, password: '[REDACTED]' });
