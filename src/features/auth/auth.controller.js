@@ -49,7 +49,7 @@ exports.validateToken = catchAsync(async (req, res, next) => {
 // Remove face data from a user
 exports.checkFaceId = catchAsync(async (req, res, next) => {
   try {
-    const { userId } = req.params;
+    const userId = req.params.userId || req.query.userId || req.body.userId;
     
     if (!userId) {
       return next(new AppError('User ID is required', 400));
