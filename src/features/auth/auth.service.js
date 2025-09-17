@@ -53,9 +53,11 @@ const createSendToken = async (user, statusCode, res) => {
 
   // Create user response without sensitive data
   const fullName = user.fullName || user.name || user.username || '';
+  const username = user.username || null;
   const userResponse = {
     userId: user.userId,
     fullName,
+    username,
     email: user.email,
     role: user.role || "user",
     permissions: user.permissions || [],
@@ -101,18 +103,51 @@ exports.updateUserPassword = async (userId, newPassword) => {
   });
 };
 
-const signup = async (userObj) => {
+const signup = async (userObj = {}) => {
+  const timestamp = new Date().toISOString();
+  const email = userObj.email ? String(userObj.email).toLowerCase() : null;
+  const rawUsername = userObj.username ? String(userObj.username).trim() : '';
+  const rawFullName = userObj.fullName ? String(userObj.fullName).trim() : '';
+  const username = rawUsername || rawFullName || (email ? email.split('@')[0] : '');
+  const fullName = rawFullName || username;
+
+  if (!email) {
+    throw new AppError('Email is required to register', 400);
+  }
+
+  if (!userObj.password) {
+    throw new AppError('Password is required to register', 400);
+  }
+
+  if (!username) {
+    throw new AppError('Username is required to register', 400);
+  }
+
+  // Ensure email uniqueness for clearer error responses
+  const existingByEmail = await User.findByEmail(email);
+  if (existingByEmail) {
+    throw new AppError('Email already exists', 400);
+  }
+
+  const existingByUsername = await User.findByUsername(username);
+  if (existingByUsername) {
+    throw new AppError('Username already exists', 400);
+  }
+
   // Hash the password before storing
   const hashedPassword = await bcrypt.hash(userObj.password, 12);
-  
+
   // Ensure all fields are properly captured
   const userData = {
     ...userObj,
+    email,
+    username,
+    fullName,
     password: hashedPassword, // Use hashed password instead of plain text
     uploadedPhoto: userObj.uploadedPhoto || null,
     verificationStatus: 'pending',
-    updatedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString()
+    updatedAt: timestamp,
+    createdAt: timestamp
   };
 
   const newUser = await User.create(userData);
@@ -164,19 +199,27 @@ const login = async (identifier, password, isAdminLogin = false) => {
       }
       console.log('Found admin user:', { ...user, password: '[REDACTED]' });
     } else {
-      // Regular user login - use the User model's findByEmail method which is properly configured
+      // Regular user login - try email first, then username
       console.log('Searching for user with identifier:', identifier);
-      user = await User.findByEmail(identifier);
-      
+      user = await User.findByEmail(normalizedSearchValue);
+
       if (!user) {
-      console.log('No user found with identifier:', identifier);
+        user = await User.findByUsername(searchValue);
+      }
+
+      if (!user) {
+        console.log('No user found with identifier:', identifier);
         throw new AppError('Invalid email or password', 401);
       }
+
       console.log('Found user:', { ...user, password: '[REDACTED]' });
     }
 
     // 3) Verify password
     console.log('Comparing password...');
+    if (user && user.usernameLower) {
+      delete user.usernameLower;
+    }
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     console.log('Password correct:', isPasswordCorrect);
     

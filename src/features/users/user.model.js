@@ -18,26 +18,33 @@ const UserModel = {
     // Create a new user
     async create(userData) {
         const timestamp = new Date().toISOString();
-        
+        const normalizedUsername = userData.username ? String(userData.username).trim() : null;
+        const item = {
+            userId: userData.userId,
+            fullName: userData.fullName || normalizedUsername || userData.email,
+            email: userData.email,
+            password: userData.password,
+            phone: userData.phone,
+            role: userData.role || 'user',
+            permissions: userData.permissions || [],
+            avatar: userData.avatar,
+            verificationStatus: userData.verificationStatus || 'pending',
+            aadhaarPhoto: userData.aadhaarPhoto,
+            uploadedPhoto: userData.uploadedPhoto,
+            lastLogin: userData.lastLogin,
+            status: userData.status || 'active',
+            createdAt: timestamp,
+            updatedAt: timestamp
+        };
+
+        if (normalizedUsername) {
+            item.username = normalizedUsername;
+            item.usernameLower = normalizedUsername.toLowerCase();
+        }
+
         const params = {
             TableName: this.tableName,
-            Item: {
-                userId: userData.userId,
-                fullName: userData.fullName,
-                email: userData.email,
-                password: userData.password,
-                phone: userData.phone,
-                role: userData.role || 'user',
-                permissions: userData.permissions || [],
-                avatar: userData.avatar,
-                verificationStatus: userData.verificationStatus || 'pending',
-                aadhaarPhoto: userData.aadhaarPhoto,
-                uploadedPhoto: userData.uploadedPhoto,
-                lastLogin: userData.lastLogin,
-                status: userData.status || 'active',
-                createdAt: timestamp,
-                updatedAt: timestamp
-            },
+            Item: item,
             // Ensure email is unique
             ConditionExpression: 'attribute_not_exists(email)'
         };
@@ -110,6 +117,31 @@ async getByEmail(email) {
         return this.getByEmail(email);
     },
 
+    // Get user by username (case-insensitive scan)
+    async getByUsername(username) {
+        if (!username) {
+            return null;
+        }
+
+        const trimmedUsername = String(username).trim();
+        const params = {
+            TableName: this.tableName,
+            FilterExpression: 'usernameLower = :normalized OR username = :exact',
+            ExpressionAttributeValues: {
+                ':normalized': trimmedUsername.toLowerCase(),
+                ':exact': trimmedUsername
+            }
+        };
+
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
+        return (result.Items && result.Items.length > 0) ? result.Items[0] : null;
+    },
+
+    async findByUsername(username) {
+        return this.getByUsername(username);
+    },
+
     // Update user
     async update(userId, updateData) {
         const timestamp = new Date().toISOString();
@@ -118,6 +150,12 @@ async getByEmail(email) {
             ':updatedAt': timestamp
         };
         const ExpressionAttributeNames = {};
+
+        // Maintain usernameLower when username changes
+        if (updateData.username) {
+            updateData.username = String(updateData.username).trim();
+            updateData.usernameLower = updateData.username.toLowerCase();
+        }
 
         // Build update expression dynamically
         let i = 0;

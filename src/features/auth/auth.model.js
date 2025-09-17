@@ -84,6 +84,7 @@ async function login(identifier, password) {
   await dynamoDB.update(updateParams).promise();
 
   const fullName = user.fullName || user.name || user.username || '';
+  const username = user.username || null;
 
   // Format the response
   return {
@@ -93,6 +94,7 @@ async function login(identifier, password) {
       user: {
         userId: user.userId,
         fullName,
+        username,
         email: user.email,
         role: user.role || "user",
         permissions: user.permissions || [],
