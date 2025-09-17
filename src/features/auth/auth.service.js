@@ -106,10 +106,9 @@ exports.updateUserPassword = async (userId, newPassword) => {
 const signup = async (userObj = {}) => {
   const timestamp = new Date().toISOString();
   const email = userObj.email ? String(userObj.email).toLowerCase() : null;
-  const rawUsername = userObj.username ? String(userObj.username).trim() : '';
-  const rawFullName = userObj.fullName ? String(userObj.fullName).trim() : '';
-  const username = rawUsername || rawFullName || (email ? email.split('@')[0] : '');
-  const fullName = rawFullName || username;
+  const rawUsername = userObj.username;
+  const username = rawUsername ? String(rawUsername).trim() : '';
+  const fullName = userObj.fullName ? String(userObj.fullName).trim() : '';
 
   if (!email) {
     throw new AppError('Email is required to register', 400);

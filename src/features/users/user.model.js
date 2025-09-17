@@ -21,7 +21,7 @@ const UserModel = {
         const normalizedUsername = userData.username ? String(userData.username).trim() : null;
         const item = {
             userId: userData.userId,
-            fullName: userData.fullName || normalizedUsername || userData.email,
+            fullName: userData.fullName || userData.email,
             email: userData.email,
             password: userData.password,
             phone: userData.phone,
