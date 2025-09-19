@@ -4,6 +4,8 @@ const { initializeDynamoDB } = require('../../config/config');
 const TABLE_NAME = process.env.PHONE_OTP_TABLE || 'PhoneOtps';
 const MAX_ATTEMPTS = 5;
 
+let tableInitialized = false;
+
 const buildKey = (phone, purpose) => `${phone}#${purpose}`;
 
 const hashCode = (code) =>
@@ -12,7 +14,55 @@ const hashCode = (code) =>
     .update(String(code))
     .digest('hex');
 
+const ensureTableExists = async () => {
+  if (tableInitialized) {
+    return;
+  }
+
+  const { dynamoDB } = await initializeDynamoDB();
+
+  try {
+    await dynamoDB.describeTable({ TableName: TABLE_NAME }).promise();
+  } catch (error) {
+    if (error.code !== 'ResourceNotFoundException') {
+      throw error;
+    }
+
+    await dynamoDB
+      .createTable({
+        TableName: TABLE_NAME,
+        AttributeDefinitions: [{ AttributeName: 'pk', AttributeType: 'S' }],
+        KeySchema: [{ AttributeName: 'pk', KeyType: 'HASH' }],
+        BillingMode: 'PAY_PER_REQUEST'
+      })
+      .promise();
+
+    await dynamoDB.waitFor('tableExists', { TableName: TABLE_NAME }).promise();
+
+    try {
+      await dynamoDB
+        .updateTimeToLive({
+          TableName: TABLE_NAME,
+          TimeToLiveSpecification: {
+            AttributeName: 'ttl',
+            Enabled: true
+          }
+        })
+        .promise();
+    } catch (ttlError) {
+      // Ignore if TTL already enabled
+      if (ttlError.code !== 'ValidationException') {
+        console.warn(`⚠️ Failed to enable TTL on ${TABLE_NAME}:`, ttlError.message);
+      }
+    }
+  }
+
+  tableInitialized = true;
+};
+
 exports.storeOtp = async ({ phone, purpose, code, ttlSeconds, payload = {} }) => {
+  await ensureTableExists();
+
   const now = new Date();
   const expiresAtSeconds = Math.floor(now.getTime() / 1000) + ttlSeconds;
   const item = {
@@ -40,6 +90,8 @@ exports.storeOtp = async ({ phone, purpose, code, ttlSeconds, payload = {} }) =>
 };
 
 exports.getOtp = async ({ phone, purpose }) => {
+  await ensureTableExists();
+
   const params = {
     TableName: TABLE_NAME,
     Key: { pk: buildKey(phone, purpose) }
@@ -51,6 +103,8 @@ exports.getOtp = async ({ phone, purpose }) => {
 };
 
 exports.deleteOtp = async ({ phone, purpose }) => {
+  await ensureTableExists();
+
   const params = {
     TableName: TABLE_NAME,
     Key: { pk: buildKey(phone, purpose) }
@@ -61,6 +115,8 @@ exports.deleteOtp = async ({ phone, purpose }) => {
 };
 
 exports.incrementAttempts = async ({ phone, purpose }) => {
+  await ensureTableExists();
+
   const params = {
     TableName: TABLE_NAME,
     Key: { pk: buildKey(phone, purpose) },
@@ -100,4 +156,3 @@ exports.validateCode = (code, item) => {
 };
 
 exports.MAX_ATTEMPTS = MAX_ATTEMPTS;
-
