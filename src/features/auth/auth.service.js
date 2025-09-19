@@ -726,5 +726,9 @@ module.exports = {
   forgotPassword,
   resetPassword,
   updatePassword,
-  updateLastLogin
+  updateLastLogin,
+  requestSignupOtp,
+  verifySignupOtp,
+  requestPhoneLoginOtp,
+  verifyPhoneLoginOtp
 };
