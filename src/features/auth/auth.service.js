@@ -57,15 +57,15 @@ const createSendToken = async (user, statusCode, res) => {
   // Create user response without sensitive data
   const fullName = user.fullName || user.name || user.username || '';
   const username = user.username || null;
+  const role = user.role || 'user';
   const userResponse = {
     userId: user.userId,
     fullName,
     username,
     email: user.email,
-    role: user.role || "user",
-    permissions: user.permissions || [],
-    verificationStatus: user.verificationStatus || "pending",
-    status: user.status || "active",
+    role,
+    verificationStatus: user.verificationStatus || 'pending',
+    status: user.status || 'active',
     uploadedPhoto: user.avatar || user.uploadedPhoto || null,
     aadhaarPhoto: user.aadhaarPhoto || null,
     _id: user.userId,
@@ -74,6 +74,10 @@ const createSendToken = async (user, statusCode, res) => {
     __v: 0,
     lastLoginFormatted
   };
+
+  if (role === 'admin') {
+    userResponse.permissions = user.permissions || [];
+  }
 
   res.status(statusCode).json({
     status: 'success',
