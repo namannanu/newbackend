@@ -2,6 +2,26 @@ const AWS = require('aws-sdk');
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 const dynamoDBRaw = new AWS.DynamoDB();
 
+const scanAll = async (params) => {
+    const items = [];
+    let ExclusiveStartKey;
+
+    do {
+        const response = await dynamoDB.scan({
+            ...params,
+            ExclusiveStartKey
+        }).promise();
+
+        if (Array.isArray(response.Items)) {
+            items.push(...response.Items);
+        }
+
+        ExclusiveStartKey = response.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+
+    return items;
+};
+
 const TicketModel = {
     tableName: 'EventTickets',
 
@@ -179,6 +199,24 @@ const TicketModel = {
 
         const result = await dynamoDB.query(params).promise();
         return result.Items;
+    },
+
+    async getByStatus(status = 'all') {
+        const params = {
+            TableName: this.tableName
+        };
+
+        if (status && status !== 'all') {
+            params.FilterExpression = '#status = :status';
+            params.ExpressionAttributeNames = { '#status': 'status' };
+            params.ExpressionAttributeValues = { ':status': status };
+        }
+
+        return scanAll(params);
+    },
+
+    async getAll() {
+        return this.getByStatus('all');
     },
 
     // Check in ticket

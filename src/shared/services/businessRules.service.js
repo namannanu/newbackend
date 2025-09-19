@@ -1,5 +1,6 @@
-const mongoose = require('mongoose');
 const AppError = require('../utils/appError');
+const UserEventRegistration = require('../../features/registrations/userEventRegistration.model');
+const EventModel = require('../../features/events/event.model');
 
 class BusinessRulesService {
   
@@ -10,21 +11,12 @@ class BusinessRulesService {
   static async validateRegistrationIntegrity(registrationData) {
     const { userId, eventId } = registrationData;
 
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new AppError('Invalid user ID format', 400);
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(eventId)) {
-      throw new AppError('Invalid event ID format', 400);
+    if (!userId || !eventId) {
+      throw new AppError('User ID and Event ID are required', 400);
     }
 
     // Check for duplicate registration
-    const UserEventRegistration = require('../../features/registrations/userEventRegistration.model');
-    const existingRegistration = await UserEventRegistration.findOne({
-      userId,
-      eventId
-    });
+    const existingRegistration = await UserEventRegistration.findOne({ eventId, userId });
 
     if (existingRegistration) {
       throw new AppError('User is already registered for this event', 400);
@@ -38,17 +30,23 @@ class BusinessRulesService {
    * @param {String} eventId 
    */
   static async validateEventCapacity(eventId) {
-    // For now, we'll skip actual event capacity validation
-    // In a real implementation, this would check against an Event model
-    
-    const UserEventRegistration = require('../../features/registrations/userEventRegistration.model');
-    const registrationCount = await UserEventRegistration.countDocuments({ eventId });
-    
-    // Mock capacity check - assume max 1000 registrations per event
-    const MAX_CAPACITY = 1000;
-    
-    if (registrationCount >= MAX_CAPACITY) {
-      throw new AppError('Event has reached maximum capacity', 400);
+    if (!eventId) {
+      throw new AppError('Event ID is required', 400);
+    }
+
+    const event = await EventModel.get(eventId);
+
+    if (!event) {
+      throw new AppError('Event not found', 404);
+    }
+
+    // If the event defines capacity, enforce it using registration count
+    if (typeof event.totalTickets === 'number' && event.totalTickets > 0) {
+      const registrationCount = await UserEventRegistration.countDocuments({ eventId });
+
+      if (registrationCount >= event.totalTickets) {
+        throw new AppError('Event has reached maximum capacity', 400);
+      }
     }
 
     return true;

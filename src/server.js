@@ -3,6 +3,7 @@ const colors = require('colors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
+const fs = require('fs');
 const { initializeDynamoDB } = require('./config/config');
 const verifyAWSConnection = require('./utils/verifyAWSConnection');
 const { attachDBMiddleware } = require('./shared/middlewares/db.middleware');
@@ -11,10 +12,29 @@ const path = require('path');
 // Initialize Express app
 const app = express();
 
-// Load environment variables
-dotenv.config({
-    path: path.join(__dirname, 'config', 'config.env'),
-});
+// Load environment variables (prefer project root .env, fall back to config/config.env)
+const envPaths = [
+    path.join(__dirname, '..', '.env'),
+    path.join(__dirname, 'config', 'config.env')
+];
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+        const result = dotenv.config({ path: envPath });
+        if (result.error) {
+            console.warn(`⚠️ Failed to load env file at ${envPath}:`, result.error.message);
+        } else {
+            envLoaded = true;
+            break;
+        }
+    }
+}
+
+if (!envLoaded) {
+    dotenv.config();
+    console.warn('⚠️ No env file found; relying on process environment variables.');
+}
 
 // Serve static files (if any)
 app.use(express.static(path.join(__dirname, '..', 'public')));

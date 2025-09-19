@@ -25,6 +25,7 @@ const UserModel = {
             email: userData.email,
             password: userData.password,
             phone: userData.phone,
+            phoneVerified: userData.phoneVerified === undefined ? false : userData.phoneVerified,
             role: userData.role || 'user',
             permissions: userData.permissions || [],
             avatar: userData.avatar,
@@ -140,6 +141,28 @@ async getByEmail(email) {
 
     async findByUsername(username) {
         return this.getByUsername(username);
+    },
+
+    async findByPhone(phone) {
+        if (!phone) {
+            return null;
+        }
+
+        const trimmedPhone = String(phone).trim();
+        const params = {
+            TableName: this.tableName,
+            FilterExpression: '#phone = :phone',
+            ExpressionAttributeNames: {
+                '#phone': 'phone'
+            },
+            ExpressionAttributeValues: {
+                ':phone': trimmedPhone
+            }
+        };
+
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
+        return (result.Items && result.Items.length > 0) ? result.Items[0] : null;
     },
 
     // Update user

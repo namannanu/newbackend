@@ -10,6 +10,21 @@ exports.signup = catchAsync(async (req, res, next) => {
   await createSendToken(newUser, 201, res);
 });
 
+exports.requestSignupOtp = catchAsync(async (req, res, next) => {
+  const { phone, username, fullName } = req.body;
+  const result = await authService.requestSignupOtp({ phone, username, fullName });
+  res.status(200).json({
+    status: 'success',
+    message: result.message
+  });
+});
+
+exports.verifySignupOtp = catchAsync(async (req, res, next) => {
+  const { phone, otp, username, fullName } = req.body;
+  const user = await authService.verifySignupOtp({ phone, code: otp, username, fullName });
+  await createSendToken(user, 201, res);
+});
+
 exports.login = catchAsync(async (req, res, next) => {
   const { email, username, password } = req.body;
   const identifier = email || username;
@@ -21,6 +36,21 @@ exports.adminLogin = catchAsync(async (req, res, next) => {
   const { email, username, password } = req.body;
   const identifier = email || username;
   const user = await authService.login(identifier, password, true);
+  await createSendToken(user, 200, res);
+});
+
+exports.requestPhoneLoginOtp = catchAsync(async (req, res, next) => {
+  const { phone } = req.body;
+  const result = await authService.requestPhoneLoginOtp({ phone });
+  res.status(200).json({
+    status: 'success',
+    message: result.message
+  });
+});
+
+exports.verifyPhoneLoginOtp = catchAsync(async (req, res, next) => {
+  const { phone, otp } = req.body;
+  const user = await authService.verifyPhoneLoginOtp({ phone, code: otp });
   await createSendToken(user, 200, res);
 });
 

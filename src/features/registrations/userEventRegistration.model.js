@@ -2,82 +2,119 @@ const AWS = require('aws-sdk');
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 const dynamoDBRaw = new AWS.DynamoDB();
 
-const UserEventRegistrationModel = {
-    tableName: 'EventUserRegistrations',
+const TABLE_NAME = 'EventUserRegistrations';
 
-    // Initialize table if it doesn't exist
-    async initTable() {
-        try {
-            await dynamoDBRaw.describeTable({ TableName: this.tableName }).promise();
-            console.log(`Table ${this.tableName} already exists`);
-        } catch (error) {
-            if (error.code === 'ResourceNotFoundException') {
-                console.log(`Creating table ${this.tableName}...`);
-                const params = {
-                    TableName: this.tableName,
-                    KeySchema: [
-                        { AttributeName: 'registrationId', KeyType: 'HASH' }
-                    ],
-                    AttributeDefinitions: [
-                        { AttributeName: 'registrationId', AttributeType: 'S' },
-                        { AttributeName: 'eventId', AttributeType: 'S' },
-                        { AttributeName: 'userId', AttributeType: 'S' },
-                        { AttributeName: 'status', AttributeType: 'S' },
-                        { AttributeName: 'registrationDate', AttributeType: 'S' }
-                    ],
-                    GlobalSecondaryIndexes: [
-                        {
-                            IndexName: 'EventUserIndex',
-                            KeySchema: [
-                                { AttributeName: 'eventId', KeyType: 'HASH' },
-                                { AttributeName: 'userId', KeyType: 'RANGE' }
-                            ],
-                            Projection: { ProjectionType: 'ALL' },
-                            ProvisionedThroughput: {
-                                ReadCapacityUnits: 5,
-                                WriteCapacityUnits: 5
-                            }
-                        },
-                        {
-                            IndexName: 'UserRegistrationsIndex',
-                            KeySchema: [
-                                { AttributeName: 'userId', KeyType: 'HASH' }
-                            ],
-                            Projection: { ProjectionType: 'ALL' },
-                            ProvisionedThroughput: {
-                                ReadCapacityUnits: 5,
-                                WriteCapacityUnits: 5
-                            }
-                        },
-                        {
-                            IndexName: 'StatusIndex',
-                            KeySchema: [
-                                { AttributeName: 'status', KeyType: 'HASH' },
-                                { AttributeName: 'registrationDate', KeyType: 'RANGE' }
-                            ],
-                            Projection: { ProjectionType: 'ALL' },
-                            ProvisionedThroughput: {
-                                ReadCapacityUnits: 5,
-                                WriteCapacityUnits: 5
-                            }
-                        }
-                    ],
-                    ProvisionedThroughput: {
-                        ReadCapacityUnits: 5,
-                        WriteCapacityUnits: 5
-                    }
-                };
+const buildTimestamp = () => new Date().toISOString();
 
-                await dynamoDBRaw.createTable(params).promise();
-                console.log(`Table ${this.tableName} created successfully`);
-                
-                // Wait for table to become active
-                await dynamoDBRaw.waitFor('tableExists', { TableName: this.tableName }).promise();
-            } else {
-                throw error;
-            }
+const scanAll = async (params) => {
+    const items = [];
+    let ExclusiveStartKey;
+
+    do {
+        const response = await dynamoDB.scan({
+            ...params,
+            ExclusiveStartKey
+        }).promise();
+
+        if (Array.isArray(response.Items)) {
+            items.push(...response.Items);
         }
-    },
+
+        ExclusiveStartKey = response.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+
+    return items;
+};
+
+const queryAll = async (params) => {
+    const items = [];
+    let ExclusiveStartKey;
+
+    do {
+        const response = await dynamoDB.query({
+            ...params,
+            ExclusiveStartKey
+        }).promise();
+
+        if (Array.isArray(response.Items)) {
+            items.push(...response.Items);
+        }
+
+        ExclusiveStartKey = response.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+
+    return items;
+};
+
+const buildUpdateExpression = (updateData = {}) => {
+    const ExpressionAttributeNames = {};
+    const ExpressionAttributeValues = {};
+    const sets = [];
+    const adds = [];
+    let index = 0;
+
+    const data = { ...updateData };
+    const inc = data.$inc;
+    delete data.$inc;
+
+    Object.entries(data).forEach(([key, value]) => {
+        if (value === undefined) {
+            return;
+        }
+
+        const attrName = `#attr${index}`;
+        const attrValue = `:val${index}`;
+        ExpressionAttributeNames[attrName] = key;
+        ExpressionAttributeValues[attrValue] = value;
+        sets.push(`${attrName} = ${attrValue}`);
+        index++;
+    });
+
+    if (inc && typeof inc === 'object') {
+        Object.entries(inc).forEach(([key, value]) => {
+            const attrName = `#inc${index}`;
+            const attrValue = `:inc${index}`;
+            ExpressionAttributeNames[attrName] = key;
+            ExpressionAttributeValues[attrValue] = value;
+            adds.push(`${attrName} ${attrValue}`);
+            index++;
+        });
+    }
+
+    const timestamp = buildTimestamp();
+    ExpressionAttributeNames['#updatedAt'] = 'updatedAt';
+    ExpressionAttributeValues[':updatedAt'] = timestamp;
+    sets.push('#updatedAt = :updatedAt');
+
+    const parts = [];
+
+    if (sets.length) {
+        parts.push(`SET ${sets.join(', ')}`);
+    }
+
+    if (adds.length) {
+        parts.push(`ADD ${adds.join(', ')}`);
+    }
+
+    return {
+        UpdateExpression: parts.join(' '),
+        ExpressionAttributeNames,
+        ExpressionAttributeValues
+    };
+};
+
+const sanitizeItem = (item) => {
+    const sanitized = { ...item };
+    Object.keys(sanitized).forEach((key) => {
+        if (sanitized[key] === undefined) {
+            delete sanitized[key];
+        }
+    });
+    return sanitized;
+};
+
+const UserEventRegistrationModel = {
+    tableName: TABLE_NAME,
 
     // Define primary key and GSI configurations
     keys: {
@@ -100,41 +137,236 @@ const UserEventRegistrationModel = {
         }
     },
 
+    // Initialize table if it doesn't exist
+    async initTable() {
+        try {
+            await dynamoDBRaw.describeTable({ TableName: this.tableName }).promise();
+        } catch (error) {
+            if (error.code !== 'ResourceNotFoundException') {
+                throw error;
+            }
+
+            const params = {
+                TableName: this.tableName,
+                KeySchema: [
+                    { AttributeName: 'registrationId', KeyType: 'HASH' }
+                ],
+                AttributeDefinitions: [
+                    { AttributeName: 'registrationId', AttributeType: 'S' },
+                    { AttributeName: 'eventId', AttributeType: 'S' },
+                    { AttributeName: 'userId', AttributeType: 'S' },
+                    { AttributeName: 'status', AttributeType: 'S' },
+                    { AttributeName: 'registrationDate', AttributeType: 'S' }
+                ],
+                GlobalSecondaryIndexes: [
+                    {
+                        IndexName: this.keys.indexes.eventUserIndex.name,
+                        KeySchema: [
+                            { AttributeName: 'eventId', KeyType: 'HASH' },
+                            { AttributeName: 'userId', KeyType: 'RANGE' }
+                        ],
+                        Projection: { ProjectionType: 'ALL' },
+                        ProvisionedThroughput: {
+                            ReadCapacityUnits: 5,
+                            WriteCapacityUnits: 5
+                        }
+                    },
+                    {
+                        IndexName: this.keys.indexes.userRegistrationsIndex.name,
+                        KeySchema: [
+                            { AttributeName: 'userId', KeyType: 'HASH' }
+                        ],
+                        Projection: { ProjectionType: 'ALL' },
+                        ProvisionedThroughput: {
+                            ReadCapacityUnits: 5,
+                            WriteCapacityUnits: 5
+                        }
+                    },
+                    {
+                        IndexName: this.keys.indexes.statusIndex.name,
+                        KeySchema: [
+                            { AttributeName: 'status', KeyType: 'HASH' },
+                            { AttributeName: 'registrationDate', KeyType: 'RANGE' }
+                        ],
+                        Projection: { ProjectionType: 'ALL' },
+                        ProvisionedThroughput: {
+                            ReadCapacityUnits: 5,
+                            WriteCapacityUnits: 5
+                        }
+                    }
+                ],
+                ProvisionedThroughput: {
+                    ReadCapacityUnits: 5,
+                    WriteCapacityUnits: 5
+                }
+            };
+
+            await dynamoDBRaw.createTable(params).promise();
+            await dynamoDBRaw.waitFor('tableExists', { TableName: this.tableName }).promise();
+        }
+    },
+
     // Create a new registration
     async create(registrationData) {
-        const timestamp = new Date().toISOString();
-        const registrationId = `reg_${Date.now()}`;
+        const timestamp = buildTimestamp();
+        const registrationId = registrationData.registrationId || `reg_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+        const item = sanitizeItem({
+            registrationId,
+            eventId: registrationData.eventId,
+            userId: registrationData.userId,
+            registrationDate: registrationData.registrationDate ? new Date(registrationData.registrationDate).toISOString() : timestamp,
+            status: registrationData.status || 'pending',
+            checkInTime: registrationData.checkInTime || null,
+            waitingStatus: registrationData.waitingStatus || 'queued',
+            faceVerificationStatus: registrationData.faceVerificationStatus || 'pending',
+            ticketAvailabilityStatus: registrationData.ticketAvailabilityStatus || 'pending',
+            verificationAttempts: typeof registrationData.verificationAttempts === 'number' ? registrationData.verificationAttempts : 0,
+            lastVerificationAttempt: registrationData.lastVerificationAttempt || null,
+            ticketIssued: Boolean(registrationData.ticketIssued),
+            ticketIssuedDate: registrationData.ticketIssuedDate || null,
+            adminBooked: Boolean(registrationData.adminBooked),
+            adminOverrideReason: registrationData.adminOverrideReason || null,
+            ticketId: registrationData.ticketId || null,
+            createdAt: timestamp,
+            updatedAt: timestamp
+        });
 
         const params = {
             TableName: this.tableName,
-            Item: {
-            registrationId: registrationId,
-            eventId: registrationData.eventId,
-            userId: registrationData.userId,
-            registrationDate: timestamp,
-            status: registrationData.status || 'pending',
-            checkInTime: null,
-            waitingStatus: registrationData.waitingStatus || 'queued',
-            faceVerificationStatus: 'pending',
-            ticketAvailabilityStatus: 'pending',
-            verificationAttempts: 0,
-            lastVerificationAttempt: null,
-            ticketIssued: false,
-            ticketIssuedDate: null,
-            adminBooked: false,
-            adminOverrideReason: null,
-            updatedAt: timestamp
-        }
-    };
+            Item: item
+        };
 
-    try {
         await dynamoDB.put(params).promise();
-        return params.Item;
-    } catch (error) {
-        console.error('Error creating registration:', error);
-        throw error;
-    }
-},
+        return item;
+    },
+
+    async get(registrationId) {
+        const params = {
+            TableName: this.tableName,
+            Key: {
+                registrationId
+            }
+        };
+
+        const result = await dynamoDB.get(params).promise();
+        return result.Item || null;
+    },
+
+    async findById(registrationId) {
+        return this.get(registrationId);
+    },
+
+    async findByIdAndUpdate(registrationId, updateData = {}) {
+        const { UpdateExpression, ExpressionAttributeNames, ExpressionAttributeValues } = buildUpdateExpression(updateData);
+
+        const params = {
+            TableName: this.tableName,
+            Key: {
+                registrationId
+            },
+            UpdateExpression,
+            ExpressionAttributeNames,
+            ExpressionAttributeValues,
+            ConditionExpression: 'attribute_exists(registrationId)',
+            ReturnValues: 'ALL_NEW'
+        };
+
+        try {
+            const result = await dynamoDB.update(params).promise();
+            return result.Attributes || null;
+        } catch (error) {
+            if (error.code === 'ConditionalCheckFailedException') {
+                return null;
+            }
+            throw error;
+        }
+    },
+
+    async findByIdAndDelete(registrationId) {
+        const params = {
+            TableName: this.tableName,
+            Key: {
+                registrationId
+            },
+            ReturnValues: 'ALL_OLD'
+        };
+
+        const result = await dynamoDB.delete(params).promise();
+        return result.Attributes || null;
+    },
+
+    async find(filter = {}) {
+        if (filter.registrationId) {
+            const item = await this.get(filter.registrationId);
+            return item ? [item] : [];
+        }
+
+        if (filter.status) {
+            const params = {
+                TableName: this.tableName,
+                IndexName: this.keys.indexes.statusIndex.name,
+                KeyConditionExpression: '#status = :status',
+                ExpressionAttributeNames: {
+                    '#status': 'status'
+                },
+                ExpressionAttributeValues: {
+                    ':status': filter.status
+                }
+            };
+
+            const items = await queryAll(params);
+            return items.sort((a, b) => new Date(b.registrationDate || 0) - new Date(a.registrationDate || 0));
+        }
+
+        if (filter.eventId && filter.userId) {
+            const params = {
+                TableName: this.tableName,
+                IndexName: this.keys.indexes.eventUserIndex.name,
+                KeyConditionExpression: 'eventId = :eventId AND userId = :userId',
+                ExpressionAttributeValues: {
+                    ':eventId': filter.eventId,
+                    ':userId': filter.userId
+                }
+            };
+
+            const items = await queryAll(params);
+            return items;
+        }
+
+        // Fallback to scanning when no index-based filter applies
+        const scanParams = {
+            TableName: this.tableName
+        };
+
+        if (Object.keys(filter).length) {
+            const filterExpressions = [];
+            scanParams.ExpressionAttributeNames = {};
+            scanParams.ExpressionAttributeValues = {};
+
+            Object.entries(filter).forEach(([key, value], idx) => {
+                const nameKey = `#filter${idx}`;
+                const valueKey = `:filter${idx}`;
+                filterExpressions.push(`${nameKey} = ${valueKey}`);
+                scanParams.ExpressionAttributeNames[nameKey] = key;
+                scanParams.ExpressionAttributeValues[valueKey] = value;
+            });
+
+            scanParams.FilterExpression = filterExpressions.join(' AND ');
+        }
+
+        return scanAll(scanParams);
+    },
+
+    async findOne(filter = {}) {
+        const results = await this.find(filter);
+        return results.length ? results[0] : null;
+    },
+
+    async countDocuments(filter = {}) {
+        const items = await this.find(filter);
+        return items.length;
+    },
 
     // Get registrations by event
     async getByEvent(eventId) {
@@ -147,8 +379,8 @@ const UserEventRegistrationModel = {
             }
         };
 
-        const result = await dynamoDB.query(params).promise();
-        return result.Items;
+        const items = await queryAll(params);
+        return items.sort((a, b) => new Date(b.registrationDate || 0) - new Date(a.registrationDate || 0));
     },
 
     // Get registrations by user
@@ -162,95 +394,45 @@ const UserEventRegistrationModel = {
             }
         };
 
-        const result = await dynamoDB.query(params).promise();
-        return result.Items;
+        const items = await queryAll(params);
+        return items.sort((a, b) => new Date(b.registrationDate || 0) - new Date(a.registrationDate || 0));
     },
 
     // Update registration status
     async updateStatus(registrationId, status, faceVerificationStatus = null) {
-        const timestamp = new Date().toISOString();
-        const params = {
-            TableName: this.tableName,
-            Key: {
-                registrationId: registrationId
-            },
-            UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt, verificationAttempts = verificationAttempts + :increment, lastVerificationAttempt = :lastAttempt',
-            ExpressionAttributeNames: {
-                '#status': 'status'
-            },
-            ExpressionAttributeValues: {
-                ':status': status,
-                ':updatedAt': timestamp,
-                ':increment': 1,
-                ':lastAttempt': timestamp
-            },
-            ReturnValues: 'ALL_NEW'
+        const updateData = {
+            status,
+            lastVerificationAttempt: buildTimestamp()
         };
 
         if (faceVerificationStatus) {
-            params.UpdateExpression += ', faceVerificationStatus = :faceStatus';
-            params.ExpressionAttributeValues[':faceStatus'] = faceVerificationStatus;
+            updateData.faceVerificationStatus = faceVerificationStatus;
         }
 
-        const result = await dynamoDB.update(params).promise();
-        return result.Attributes;
+        updateData.$inc = { verificationAttempts: 1 };
+
+        return this.findByIdAndUpdate(registrationId, updateData);
     },
 
     // Issue ticket
     async issueTicket(registrationId) {
-        const timestamp = new Date().toISOString();
-        const params = {
-            TableName: this.tableName,
-            Key: {
-                registrationId: registrationId
-            },
-            UpdateExpression: 'SET ticketIssued = :issued, ticketIssuedDate = :issuedDate, updatedAt = :updatedAt, ticketAvailabilityStatus = :availStatus',
-            ExpressionAttributeValues: {
-                ':issued': true,
-                ':issuedDate': timestamp,
-                ':updatedAt': timestamp,
-                ':availStatus': 'available'
-            },
-            ReturnValues: 'ALL_NEW'
-        };
-
-        const result = await dynamoDB.update(params).promise();
-        return result.Attributes;
+        return this.findByIdAndUpdate(registrationId, {
+            ticketIssued: true,
+            ticketIssuedDate: buildTimestamp(),
+            ticketAvailabilityStatus: 'available'
+        });
     },
 
     // Check-in registration
     async checkIn(registrationId) {
-        const timestamp = new Date().toISOString();
-        const params = {
-            TableName: this.tableName,
-            Key: {
-                registrationId: registrationId
-            },
-            UpdateExpression: 'SET checkInTime = :checkInTime, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':checkInTime': timestamp,
-                ':updatedAt': timestamp
-            },
-            ReturnValues: 'ALL_NEW'
-        };
-
-        const result = await dynamoDB.update(params).promise();
-        return result.Attributes;
+        return this.findByIdAndUpdate(registrationId, {
+            checkInTime: buildTimestamp()
+        });
     },
 
     // Scan the entire table - similar to MongoDB find()
     async scan() {
-        const params = {
-            TableName: this.tableName
-        };
-
-        try {
-            const result = await dynamoDB.scan(params).promise();
-            return result.Items;
-        } catch (error) {
-            console.error('Error scanning registrations:', error);
-            throw error;
-        }
+        return scanAll({ TableName: this.tableName });
     }
 };
 

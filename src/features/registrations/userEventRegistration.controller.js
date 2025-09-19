@@ -2,6 +2,29 @@ const UserEventRegistration = require('./userEventRegistration.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
 const BusinessRulesService = require('../../shared/services/businessRules.service');
+const UserModel = require('../users/user.model');
+const EventModel = require('../events/event.model');
+
+const nowIsoString = () => new Date().toISOString();
+
+const hydrateRegistration = async (registration) => {
+  if (!registration) {
+    return null;
+  }
+
+  const [user, event] = await Promise.all([
+    registration.userId ? UserModel.getUserById(registration.userId) : null,
+    registration.eventId ? EventModel.get(registration.eventId) : null
+  ]);
+
+  return {
+    ...registration,
+    user,
+    event
+  };
+};
+
+const hydrateRegistrations = async (registrations = []) => Promise.all(registrations.map(hydrateRegistration));
 
 // Initialize the DynamoDB table when the module is loaded
 (async () => {
@@ -12,22 +35,13 @@ const BusinessRulesService = require('../../shared/services/businessRules.servic
   }
 })();
 
-exports.getAllRegistrations = catchAsync(async (req, res, next) => {
-  // Use DynamoDB scan instead of MongoDB find
+exports.getAllRegistrations = catchAsync(async (req, res) => {
   const registrations = await UserEventRegistration.scan();
-  
-  // We need to manually fetch associated user and event data
-  // This is a simplified version - in a real app you'd batch these queries
-  const populatedRegistrations = [];
-  
-  for (const registration of registrations) {
-    // In a real implementation, you'd fetch user and event data here
-    populatedRegistrations.push(registration);
-  }
+  const populatedRegistrations = await hydrateRegistrations(registrations);
 
   res.status(200).json({
     status: 'success',
-    results: registrations.length,
+    results: populatedRegistrations.length,
     data: {
       registrations: populatedRegistrations
     }
@@ -35,66 +49,53 @@ exports.getAllRegistrations = catchAsync(async (req, res, next) => {
 });
 
 exports.getRegistration = catchAsync(async (req, res, next) => {
-  const registration = await UserEventRegistration.findById(req.params.id)
-    .populate('userId', 'fullName email phone')
-    .populate('eventId', 'name date location')
-    .lean();
+  const registration = await UserEventRegistration.findById(req.params.id);
 
   if (!registration) {
     return next(new AppError('No registration found with that ID', 404));
   }
 
+  const populatedRegistration = await hydrateRegistration(registration);
+
   res.status(200).json({
     status: 'success',
     data: {
-      registration
+      registration: populatedRegistration
     }
   });
 });
 
 exports.createRegistration = catchAsync(async (req, res, next) => {
   const { userId, eventId, user, event, adminBooked = false, adminOverrideReason } = req.body;
-  
-  // Support both new field names and legacy field names
+
   const userIdToUse = userId || user;
   const eventIdToUse = eventId || event;
-  
-  // Validate ObjectId format
-  if (!mongoose.Types.ObjectId.isValid(userIdToUse)) {
-    return next(new AppError('Invalid user ID format.', 400));
+
+  if (!userIdToUse || !eventIdToUse) {
+    return next(new AppError('User ID and Event ID are required', 400));
   }
-  
-  if (!mongoose.Types.ObjectId.isValid(eventIdToUse)) {
-    return next(new AppError('Invalid event ID format.', 400));
-  }
-  
-  // Validate registration data integrity using business rules
+
   await BusinessRulesService.validateRegistrationIntegrity({
     userId: userIdToUse,
     eventId: eventIdToUse
   });
 
-  // Validate event capacity
   await BusinessRulesService.validateEventCapacity(eventIdToUse);
-  
+
   const registrationData = {
     userId: userIdToUse,
     eventId: eventIdToUse,
-    registrationDate: new Date(),
+    registrationDate: nowIsoString(),
     status: 'pending',
     waitingStatus: 'queued',
     faceVerificationStatus: 'pending',
     ticketAvailabilityStatus: 'pending',
     adminBooked,
-    adminOverrideReason: adminBooked ? adminOverrideReason : null
+    adminOverrideReason: adminBooked && adminOverrideReason ? adminOverrideReason : null
   };
-  
+
   const registration = await UserEventRegistration.create(registrationData);
-  
-  const populatedRegistration = await UserEventRegistration.findById(registration._id)
-    .populate('userId', 'fullName email phone')
-    .populate('eventId', 'name date location')
-    .lean();
+  const populatedRegistration = await hydrateRegistration(registration);
 
   res.status(201).json({
     status: 'success',
@@ -106,25 +107,24 @@ exports.createRegistration = catchAsync(async (req, res, next) => {
 });
 
 exports.updateRegistration = catchAsync(async (req, res, next) => {
-  const registration = await UserEventRegistration.findByIdAndUpdate(
-    req.params.id, 
-    req.body, 
-    {
-      new: true,
-      runValidators: true
-    }
-  ).populate('userId', 'fullName email phone')
-   .populate('eventId', 'name date location')
-   .lean();
+  const updatePayload = { ...req.body };
+  delete updatePayload.registrationId;
 
-  if (!registration) {
+  const updatedRegistration = await UserEventRegistration.findByIdAndUpdate(
+    req.params.id,
+    updatePayload
+  );
+
+  if (!updatedRegistration) {
     return next(new AppError('No registration found with that ID', 404));
   }
+
+  const populatedRegistration = await hydrateRegistration(updatedRegistration);
 
   res.status(200).json({
     status: 'success',
     data: {
-      registration
+      registration: populatedRegistration
     }
   });
 });
@@ -143,43 +143,44 @@ exports.deleteRegistration = catchAsync(async (req, res, next) => {
 });
 
 exports.checkInUser = catchAsync(async (req, res, next) => {
-  const registration = await UserEventRegistration.findByIdAndUpdate(
-    req.params.id,
-    { 
-      status: 'verified',
-      checkInTime: new Date(),
-      waitingStatus: 'complete'
-    },
-    { new: true }
-  ).populate('userId', 'fullName email phone')
-   .populate('eventId', 'name date location')
-   .lean();
+  const existingRegistration = await UserEventRegistration.findById(req.params.id);
 
-  if (!registration) {
+  if (!existingRegistration) {
     return next(new AppError('No registration found with that ID', 404));
   }
+
+  BusinessRulesService.validateCheckInEligibility(existingRegistration);
+
+  const updatedRegistration = await UserEventRegistration.findByIdAndUpdate(
+    req.params.id,
+    {
+      status: 'verified',
+      checkInTime: nowIsoString(),
+      waitingStatus: 'complete'
+    }
+  );
+
+  const populatedRegistration = await hydrateRegistration(updatedRegistration);
 
   res.status(200).json({
     status: 'success',
     message: 'User checked in successfully',
     data: {
-      registration
+      registration: populatedRegistration
     }
   });
 });
 
 exports.getEventRegistrations = catchAsync(async (req, res, next) => {
-  const { eventId } = req.params;
-  
-  // Use DynamoDB query with index instead of MongoDB find
   try {
-    const registrations = await UserEventRegistration.getByEvent(eventId);
-    
+    const registrations = await UserEventRegistration.getByEvent(req.params.eventId);
+    const populatedRegistrations = await hydrateRegistrations(registrations);
+
     res.status(200).json({
       status: 'success',
-      results: registrations.length,
+      results: populatedRegistrations.length,
       data: {
-        registrations
+        registrations: populatedRegistrations
       }
     });
   } catch (error) {
@@ -189,17 +190,15 @@ exports.getEventRegistrations = catchAsync(async (req, res, next) => {
 });
 
 exports.getUserRegistrations = catchAsync(async (req, res, next) => {
-  const { userId } = req.params;
-  
-  // Use DynamoDB query with index instead of MongoDB find
   try {
-    const registrations = await UserEventRegistration.getByUser(userId);
-    
+    const registrations = await UserEventRegistration.getByUser(req.params.userId);
+    const populatedRegistrations = await hydrateRegistrations(registrations);
+
     res.status(200).json({
       status: 'success',
-      results: registrations.length,
+      results: populatedRegistrations.length,
       data: {
-        registrations
+        registrations: populatedRegistrations
       }
     });
   } catch (error) {
@@ -208,34 +207,31 @@ exports.getUserRegistrations = catchAsync(async (req, res, next) => {
   }
 });
 
-// New methods for comprehensive schema support
-
 exports.startFaceVerification = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  const { faceVerificationId } = req.body;
-  
-  const registration = await UserEventRegistration.findByIdAndUpdate(
-    id,
-    {
-      faceVerificationStatus: 'processing',
-      $inc: { verificationAttempts: 1 },
-      lastVerificationAttempt: new Date(),
-      waitingStatus: 'processing'
-    },
-    { new: true }
-  ).populate('userId', 'fullName email phone')
-   .populate('eventId', 'name date location')
-   .lean();
+
+  const registration = await UserEventRegistration.findById(id);
 
   if (!registration) {
     return next(new AppError('No registration found with that ID', 404));
   }
 
+  BusinessRulesService.validateFaceVerificationAttempt(registration);
+
+  const updatedRegistration = await UserEventRegistration.findByIdAndUpdate(id, {
+    faceVerificationStatus: 'processing',
+    waitingStatus: 'processing',
+    lastVerificationAttempt: nowIsoString(),
+    $inc: { verificationAttempts: 1 }
+  });
+
+  const populatedRegistration = await hydrateRegistration(updatedRegistration);
+
   res.status(200).json({
     status: 'success',
     message: 'Face verification started',
     data: {
-      registration
+      registration: populatedRegistration
     }
   });
 });
@@ -243,71 +239,56 @@ exports.startFaceVerification = catchAsync(async (req, res, next) => {
 exports.completeFaceVerification = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const { success, ticketAvailable = false } = req.body;
-  
-  const updateData = {
-    faceVerificationStatus: success ? 'success' : 'failed',
-    ticketAvailabilityStatus: success && ticketAvailable ? 'available' : 'unavailable',
-    waitingStatus: success ? 'complete' : 'queued'
-  };
-  
-  // If verification successful and ticket available, issue ticket
-  if (success && ticketAvailable) {
-    updateData.ticketIssued = true;
-    updateData.ticketIssuedDate = new Date();
-    updateData.status = 'verified';
-  }
-  
-  const registration = await UserEventRegistration.findByIdAndUpdate(
-    id,
-    updateData,
-    { new: true }
-  ).populate('userId', 'fullName email phone')
-   .populate('eventId', 'name date location')
-   .lean();
+
+  const registration = await UserEventRegistration.findById(id);
 
   if (!registration) {
     return next(new AppError('No registration found with that ID', 404));
   }
 
+  const updateData = {
+    faceVerificationStatus: success ? 'success' : 'failed',
+    ticketAvailabilityStatus: success && ticketAvailable ? 'available' : 'unavailable',
+    waitingStatus: success ? 'complete' : 'queued'
+  };
+
+  if (success && ticketAvailable) {
+    updateData.ticketIssued = true;
+    updateData.ticketIssuedDate = nowIsoString();
+    updateData.status = 'verified';
+  }
+
+  const updatedRegistration = await UserEventRegistration.findByIdAndUpdate(id, updateData);
+  const populatedRegistration = await hydrateRegistration(updatedRegistration);
+
   res.status(200).json({
     status: 'success',
     message: `Face verification ${success ? 'completed successfully' : 'failed'}`,
     data: {
-      registration
+      registration: populatedRegistration
     }
   });
 });
 
 exports.issueTicket = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  
+
   const registration = await UserEventRegistration.findById(id);
-  
+
   if (!registration) {
     return next(new AppError('No registration found with that ID', 404));
   }
-  
-  // Apply business rules validation for ticket issuance
+
   BusinessRulesService.validateTicketIssuanceRules(registration);
-  
-  const updatedRegistration = await UserEventRegistration.findByIdAndUpdate(
-    id,
-    {
-      ticketIssued: true,
-      ticketIssuedDate: new Date(),
-      ticketAvailabilityStatus: 'available',
-      status: 'verified'
-    },
-    { new: true }
-  ).populate('userId', 'fullName email phone')
-   .populate('eventId', 'name date location')
-   .lean();
+
+  const updatedRegistration = await UserEventRegistration.issueTicket(id);
+  const populatedRegistration = await hydrateRegistration(updatedRegistration);
 
   res.status(200).json({
     status: 'success',
     message: 'Ticket issued successfully',
     data: {
-      registration: updatedRegistration
+      registration: populatedRegistration
     }
   });
 });
@@ -315,113 +296,95 @@ exports.issueTicket = catchAsync(async (req, res, next) => {
 exports.adminOverride = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const { overrideReason, issueTicket = false } = req.body;
-  
+
   if (!overrideReason) {
     return next(new AppError('Override reason is required', 400));
   }
-  
+
+  BusinessRulesService.validateAdminOverride(req.user?.id || null, overrideReason);
+
   const updateData = {
     adminBooked: true,
     adminOverrideReason: overrideReason,
     status: 'verified',
     waitingStatus: 'complete'
   };
-  
+
   if (issueTicket) {
     updateData.ticketIssued = true;
-    updateData.ticketIssuedDate = new Date();
+    updateData.ticketIssuedDate = nowIsoString();
     updateData.ticketAvailabilityStatus = 'available';
   }
-  
-  const registration = await UserEventRegistration.findByIdAndUpdate(
-    id,
-    updateData,
-    { new: true }
-  ).populate('userId', 'fullName email phone')
-   .populate('eventId', 'name date location')
-   .lean();
 
-  if (!registration) {
+  const updatedRegistration = await UserEventRegistration.findByIdAndUpdate(id, updateData);
+
+  if (!updatedRegistration) {
     return next(new AppError('No registration found with that ID', 404));
   }
+
+  const populatedRegistration = await hydrateRegistration(updatedRegistration);
 
   res.status(200).json({
     status: 'success',
     message: 'Admin override applied successfully',
     data: {
-      registration
+      registration: populatedRegistration
     }
   });
 });
 
 exports.getRegistrationsByStatus = catchAsync(async (req, res, next) => {
   const { status } = req.params;
-  
   const validStatuses = ['pending', 'verified', 'rejected'];
+
   if (!validStatuses.includes(status)) {
     return next(new AppError('Invalid status. Must be: pending, verified, or rejected', 400));
   }
-  
-  const registrations = await UserEventRegistration.find({ status })
-    .populate('userId', 'fullName email phone')
-    .populate('eventId', 'name date location')
-    .sort({ registrationDate: -1 })
-    .lean();
+
+  const registrations = await UserEventRegistration.find({ status });
+  const populatedRegistrations = await hydrateRegistrations(registrations);
 
   res.status(200).json({
     status: 'success',
-    results: registrations.length,
+    results: populatedRegistrations.length,
     data: {
-      registrations
+      registrations: populatedRegistrations
     }
   });
 });
 
-exports.getRegistrationStats = catchAsync(async (req, res, next) => {
-  // Use scan for DynamoDB instead of MongoDB aggregate
+exports.getRegistrationStats = catchAsync(async (req, res) => {
   const registrations = await UserEventRegistration.scan();
-  
-  // Calculate stats manually from the scan results
+
   const stats = registrations.reduce((acc, registration) => {
-    const status = registration.status || 'unknown';
-    if (!acc[status]) {
-      acc[status] = 0;
-    }
-    acc[status]++;
+    const statusKey = registration.status || 'unknown';
+    acc[statusKey] = (acc[statusKey] || 0) + 1;
     return acc;
   }, {});
 
-  // Convert to the format expected by frontend
-  const formattedStats = Object.keys(stats).map(key => ({
+  const formattedStats = Object.keys(stats).map((key) => ({
     _id: key,
     count: stats[key]
   }));
-  
-  // Calculate face verification stats manually
+
   const faceVerificationStats = registrations.reduce((acc, registration) => {
-    const status = registration.faceVerificationStatus || 'unknown';
-    if (!acc[status]) {
-      acc[status] = 0;
-    }
-    acc[status]++;
+    const statusKey = registration.faceVerificationStatus || 'unknown';
+    acc[statusKey] = (acc[statusKey] || 0) + 1;
     return acc;
   }, {});
 
-  // Convert to the format expected by frontend
-  const formattedFaceStats = Object.keys(faceVerificationStats).map(key => ({
+  const formattedFaceStats = Object.keys(faceVerificationStats).map((key) => ({
     _id: key,
     count: faceVerificationStats[key]
   }));
-  
-  // Calculate ticket stats manually
-  const ticketIssued = registrations.filter(reg => reg.ticketIssued).length;
-  const ticketNotIssued = registrations.length - ticketIssued;
-  const adminBooked = registrations.filter(reg => reg.adminBooked).length;
-  
+
+  const ticketIssued = registrations.filter((reg) => reg.ticketIssued).length;
+  const adminBooked = registrations.filter((reg) => reg.adminBooked).length;
+
   const ticketStats = {
     ticketsIssued: ticketIssued,
-    ticketsNotIssued: ticketNotIssued,
-    adminBooked: adminBooked,
+    ticketsNotIssued: registrations.length - ticketIssued,
+    adminBooked,
     totalRegistrations: registrations.length
   };
 
@@ -430,7 +393,7 @@ exports.getRegistrationStats = catchAsync(async (req, res, next) => {
     data: {
       statusStats: formattedStats,
       faceVerificationStats: formattedFaceStats,
-      ticketStats: ticketStats
+      ticketStats
     }
   });
 });

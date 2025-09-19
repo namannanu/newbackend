@@ -8,6 +8,9 @@ const Admin = require('../admin/admin.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
 const { sendEmail } = require('../../shared/services/email.service');
+const twilioService = require('../../shared/services/twilio.service');
+const PhoneOtpModel = require('./phone-otp.model');
+const { v4: uuidv4 } = require('uuid');
 
 const signToken = (user) => {
   return jwt.sign(
@@ -82,6 +85,40 @@ const createSendToken = async (user, statusCode, res) => {
 };
 
 exports.createSendToken = createSendToken;
+
+const OTP_PURPOSE = {
+  SIGNUP: 'signup',
+  LOGIN: 'login'
+};
+
+const OTP_TTL_SECONDS = 5 * 60;
+
+const generateOtpCode = () => String(Math.floor(100000 + Math.random() * 900000));
+
+const normalizePhone = (phone) => {
+  if (!phone) {
+    return null;
+  }
+  return String(phone).trim();
+};
+
+const handleInvalidOtp = async ({ phone, purpose, reason }) => {
+  if (reason === 'expired' || reason === 'max_attempts') {
+    await PhoneOtpModel.deleteOtp({ phone, purpose });
+  } else if (reason === 'mismatch') {
+    await PhoneOtpModel.incrementAttempts({ phone, purpose });
+  }
+
+  switch (reason) {
+    case 'expired':
+      throw new AppError('The verification code has expired. Please request a new code.', 400);
+    case 'max_attempts':
+      throw new AppError('Too many incorrect attempts. Please request a new verification code.', 400);
+    case 'mismatch':
+    default:
+      throw new AppError('Invalid verification code. Please try again.', 400);
+  }
+};
 
 exports.getUserById = async (userId) => {
   const user = await User.get(userId);
@@ -254,6 +291,207 @@ const login = async (identifier, password, isAdminLogin = false) => {
   }
 };
 
+const requestSignupOtp = async ({ phone, username, fullName }) => {
+  const normalizedPhone = normalizePhone(phone);
+  const trimmedUsername = username ? String(username).trim() : '';
+  const trimmedFullName = fullName ? String(fullName).trim() : '';
+
+  if (!normalizedPhone) {
+    throw new AppError('Phone number is required', 400);
+  }
+
+  if (!trimmedUsername) {
+    throw new AppError('Username is required', 400);
+  }
+
+  if (!trimmedFullName) {
+    throw new AppError('Full name is required', 400);
+  }
+
+  const existingPhoneUser = await User.findByPhone(normalizedPhone);
+  if (existingPhoneUser) {
+    throw new AppError('An account already exists for this phone number.', 400);
+  }
+
+  const existingUsername = await User.findByUsername(trimmedUsername);
+  if (existingUsername) {
+    throw new AppError('Username already exists. Please choose another one.', 400);
+  }
+
+  const code = generateOtpCode();
+
+  await PhoneOtpModel.storeOtp({
+    phone: normalizedPhone,
+    purpose: OTP_PURPOSE.SIGNUP,
+    code,
+    ttlSeconds: OTP_TTL_SECONDS,
+    payload: {
+      username: trimmedUsername,
+      fullName: trimmedFullName
+    }
+  });
+
+  await twilioService.sendOtp({ to: normalizedPhone, code });
+
+  return {
+    message: 'Verification code sent successfully.'
+  };
+};
+
+const verifySignupOtp = async ({ phone, code, username, fullName }) => {
+  const normalizedPhone = normalizePhone(phone);
+  const providedUsername = username ? String(username).trim() : null;
+  const providedFullName = fullName ? String(fullName).trim() : null;
+
+  if (!normalizedPhone) {
+    throw new AppError('Phone number is required', 400);
+  }
+
+  if (!code) {
+    throw new AppError('Verification code is required', 400);
+  }
+
+  const existingPhoneUser = await User.findByPhone(normalizedPhone);
+  if (existingPhoneUser) {
+    throw new AppError('An account already exists for this phone number.', 400);
+  }
+
+  const otpRecord = await PhoneOtpModel.getOtp({
+    phone: normalizedPhone,
+    purpose: OTP_PURPOSE.SIGNUP
+  });
+
+  const validation = PhoneOtpModel.validateCode(code, otpRecord);
+  if (!validation.valid) {
+    await handleInvalidOtp({ phone: normalizedPhone, purpose: OTP_PURPOSE.SIGNUP, reason: validation.reason });
+  }
+
+  const storedUsername = otpRecord?.payload?.username;
+  const storedFullName = otpRecord?.payload?.fullName;
+
+  if (storedUsername && providedUsername && storedUsername !== providedUsername) {
+    throw new AppError('Username does not match the original request.', 400);
+  }
+
+  const usernameToUse = storedUsername || providedUsername;
+  const fullNameToUse = storedFullName || providedFullName || usernameToUse;
+
+  if (!usernameToUse) {
+    throw new AppError('Username is required to complete signup.', 400);
+  }
+
+  await PhoneOtpModel.deleteOtp({
+    phone: normalizedPhone,
+    purpose: OTP_PURPOSE.SIGNUP
+  });
+
+  const randomPassword = crypto.randomBytes(32).toString('hex');
+  const hashedPassword = await bcrypt.hash(randomPassword, 12);
+  const userId = uuidv4();
+
+  const userData = {
+    userId,
+    username: usernameToUse,
+    fullName: fullNameToUse,
+    phone: normalizedPhone,
+    password: hashedPassword,
+    phoneVerified: true,
+    verificationStatus: 'verified',
+    status: 'active'
+  };
+
+  const newUser = await User.create(userData);
+
+  newUser.password = undefined;
+
+  return newUser;
+};
+
+const requestPhoneLoginOtp = async ({ phone }) => {
+  const normalizedPhone = normalizePhone(phone);
+
+  if (!normalizedPhone) {
+    throw new AppError('Phone number is required', 400);
+  }
+
+  const user = await User.findByPhone(normalizedPhone);
+  if (!user) {
+    throw new AppError('No account found with that phone number.', 404);
+  }
+
+  const code = generateOtpCode();
+
+  await PhoneOtpModel.storeOtp({
+    phone: normalizedPhone,
+    purpose: OTP_PURPOSE.LOGIN,
+    code,
+    ttlSeconds: OTP_TTL_SECONDS,
+    payload: {
+      userId: user.userId
+    }
+  });
+
+  await twilioService.sendOtp({ to: normalizedPhone, code });
+
+  return {
+    message: 'Verification code sent successfully.'
+  };
+};
+
+const verifyPhoneLoginOtp = async ({ phone, code }) => {
+  const normalizedPhone = normalizePhone(phone);
+
+  if (!normalizedPhone) {
+    throw new AppError('Phone number is required', 400);
+  }
+
+  if (!code) {
+    throw new AppError('Verification code is required', 400);
+  }
+
+  const otpRecord = await PhoneOtpModel.getOtp({
+    phone: normalizedPhone,
+    purpose: OTP_PURPOSE.LOGIN
+  });
+
+  const validation = PhoneOtpModel.validateCode(code, otpRecord);
+  if (!validation.valid) {
+    await handleInvalidOtp({ phone: normalizedPhone, purpose: OTP_PURPOSE.LOGIN, reason: validation.reason });
+  }
+
+  await PhoneOtpModel.deleteOtp({
+    phone: normalizedPhone,
+    purpose: OTP_PURPOSE.LOGIN
+  });
+
+  let user = null;
+  if (otpRecord?.payload?.userId) {
+    user = await User.get(otpRecord.payload.userId);
+  }
+
+  if (!user) {
+    user = await User.findByPhone(normalizedPhone);
+  }
+
+  if (!user) {
+    throw new AppError('Account not found. Please sign up first.', 404);
+  }
+
+  const timestamp = new Date().toISOString();
+  await User.update(user.userId, {
+    lastLogin: timestamp,
+    phoneVerified: true
+  });
+
+  user.phoneVerified = true;
+  user.lastLogin = timestamp;
+  if (user.password) {
+    user.password = undefined;
+  }
+
+  return user;
+};
+
 const updateLastLogin = async (userId, isAdmin = false) => {
   const timestamp = new Date().toISOString();
   if (isAdmin) {
@@ -277,6 +515,10 @@ const updateLastLogin = async (userId, isAdmin = false) => {
 exports.signup = signup;
 exports.login = login;
 exports.updateLastLogin = updateLastLogin;
+exports.requestSignupOtp = requestSignupOtp;
+exports.verifySignupOtp = verifySignupOtp;
+exports.requestPhoneLoginOtp = requestPhoneLoginOtp;
+exports.verifyPhoneLoginOtp = verifyPhoneLoginOtp;
 
 const protect = catchAsync(async (req, res, next) => {
   // 1) Getting token and check if it's there

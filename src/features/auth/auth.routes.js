@@ -10,7 +10,11 @@ const router = express.Router();
 router.post('/signup', authController.signup);
 // Alias commonly used by clients
 router.post('/register', authController.signup);
+router.post('/phone/signup/request-otp', authController.requestSignupOtp);
+router.post('/phone/signup/verify-otp', authController.verifySignupOtp);
 router.post('/login', authController.login);
+router.post('/phone/login/request-otp', authController.requestPhoneLoginOtp);
+router.post('/phone/login/verify-otp', authController.verifyPhoneLoginOtp);
 router.post('/admin-login', authController.adminLogin);
 
 // Public admin registration endpoint (use with caution)
@@ -36,6 +40,5 @@ router.get('/profile', userController.getMyProfile);
 router.patch('/updateMyPassword', authController.updatePassword);
 
 module.exports = router;
-
 
 
