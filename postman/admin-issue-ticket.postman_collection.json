@@ -1,0 +1,64 @@
+{
+  "info": {
+    "name": "Admin Issue Pending Tickets",
+    "description": "Manual issuance of queued tickets for a user. Requires admin JWT cookie.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    }
+  },
+  "item": [
+    {
+      "name": "Issue Pending Tickets",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "jwt={{adminJwt}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/users/{{userId}}/issue-tickets",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "users",
+            "{{userId}}",
+            "issue-tickets"
+          ]
+        },
+        "description": "Forces issuance of any queued ticket requests for the specified user. Returns issued ticket list and associated event summaries."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "userId",
+      "value": "replace-with-user-id"
+    },
+    {
+      "key": "adminJwt",
+      "value": "replace-with-admin-jwt"
+    }
+  ]
+}

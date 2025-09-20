@@ -75,6 +75,15 @@ exports.updateUser = catchAsync(async (req, res, next) => {
   // Remove password from response
   const { password, ...userWithoutPassword } = user;
 
+  if (req.body.verificationStatus === 'verified') {
+    try {
+      const { issuePendingTicketsForUser } = require('../tickets/ticket.service');
+      await issuePendingTicketsForUser(userWithoutPassword.userId || req.params.id);
+    } catch (error) {
+      console.error(`Failed to issue pending tickets after verification for user ${req.params.id}:`, error);
+    }
+  }
+
   res.status(200).json({
     status: 'success',
     data: {

@@ -26,5 +26,6 @@ router.post('/register', adminController.registerAdmin);
 
 // Face data management routes
 router.get('/users/:userId/face-data', adminController.checkFaceId);
+router.post('/users/:userId/issue-tickets', adminController.issuePendingTickets);
 
 module.exports = router;

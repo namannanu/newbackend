@@ -7,6 +7,7 @@ const Ticket = require('../tickets/ticket.model');
 const Organizer = require('../organizers/organizer.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
+const { issuePendingTicketsForUser } = require('../tickets/ticket.service');
 const { 
     validatePermissions, 
     createInvalidPermissionError, 
@@ -1436,4 +1437,31 @@ exports.checkFaceId = catchAsync(async (req, res, next) => {
     console.error(`Error checking face data: ${error.message}`);
     return next(new AppError('Failed to check face data', 500));
   }
+});
+
+exports.issuePendingTickets = catchAsync(async (req, res, next) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return next(new AppError('User ID is required', 400));
+  }
+
+  const user = await UserModel.get(userId);
+  if (!user) {
+    return next(new AppError(`No user found with ID: ${userId}`, 404));
+  }
+
+  const results = await issuePendingTicketsForUser(userId);
+  const issuedTickets = results.map((entry) => entry.ticket);
+
+  res.status(200).json({
+    status: 'success',
+    message: issuedTickets.length
+      ? `Issued ${issuedTickets.length} ticket(s) for user ${userId}`
+      : 'No pending ticket requests to issue',
+    data: {
+      tickets: issuedTickets,
+      events: results.map((entry) => entry.event)
+    }
+  });
 });

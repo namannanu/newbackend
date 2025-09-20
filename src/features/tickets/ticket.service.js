@@ -68,7 +68,7 @@ const issueTicketFromRegistration = async ({ registration, userId }) => {
     ticketId: ticket.ticketId
   });
 
-  return ticket;
+  return { ticket, event }; // include updated event snapshot for callers
 };
 
 const issuePendingTicketsForUser = async (userId) => {
@@ -90,9 +90,9 @@ const issuePendingTicketsForUser = async (userId) => {
 
     for (const registration of pendingRegistrations) {
       try {
-        const ticket = await issueTicketFromRegistration({ registration, userId });
-        if (ticket) {
-          issuedTickets.push(ticket);
+        const result = await issueTicketFromRegistration({ registration, userId });
+        if (result && result.ticket) {
+          issuedTickets.push(result);
         }
       } catch (error) {
         console.error(
