@@ -47,3 +47,31 @@ exports.sendPasswordResetEmail = async (user, resetUrl) => {
     message
   });
 };
+
+exports.sendPromotionalEmail = async ({
+  email,
+  fullName,
+  subject,
+  message,
+  html
+} = {}) => {
+  if (!email) {
+    throw new AppError('Recipient email is required for promotional messages', 400);
+  }
+
+  const greetingName = fullName ? fullName.split(' ')[0] : 'there';
+  const resolvedSubject = subject || 'Welcome!';
+  const resolvedMessage =
+    message ||
+    `Hi ${greetingName},\n\nThanks for verifying your account. Keep an eye on your inbox for upcoming updates!`;
+  const resolvedHtml =
+    html ||
+    `<p>Hi ${greetingName},</p><p>Thanks for verifying your account. Keep an eye on your inbox for upcoming updates!</p>`;
+
+  await exports.sendEmail({
+    email,
+    subject: resolvedSubject,
+    message: resolvedMessage,
+    html: resolvedHtml
+  });
+};

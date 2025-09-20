@@ -1,0 +1,65 @@
+{
+  "info": {
+    "name": "Ticket Purchase",
+    "description": "Use this request to create a ticket for an event. Set environment variables for baseUrl, eventId, userId, and jwtToken before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    }
+  },
+  "item": [
+    {
+      "name": "Purchase Ticket",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "jwt={{jwtToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"userId\": \"{{userId}}\",\n  \"quantity\": 1,\n  \"notes\": \"Optional notes for this ticket\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/tickets",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "tickets"
+          ]
+        },
+        "description": "Creates a ticket tied to an existing event and registered user. Requires a valid jwt cookie from login/signup."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "eventId",
+      "value": "replace-with-event-id"
+    },
+    {
+      "key": "userId",
+      "value": "replace-with-user-id"
+    },
+    {
+      "key": "jwtToken",
+      "value": "replace-with-jwt"
+    }
+  ]
+}

@@ -2,15 +2,20 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { promisify } = require('util');
+const { OAuth2Client } = require('google-auth-library');
 const { initializeDynamoDB } = require('../../config/config');
 const User = require('../users/user.model');
 const Admin = require('../admin/admin.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
-const { sendEmail } = require('../../shared/services/email.service');
+const { sendEmail, sendPromotionalEmail } = require('../../shared/services/email.service');
 const twilioService = require('../../shared/services/twilio.service');
 const PhoneOtpModel = require('./phone-otp.model');
 const { v4: uuidv4 } = require('uuid');
+
+const googleClient = process.env.GOOGLE_CLIENT_ID
+  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+  : null;
 
 const signToken = (user) => {
   return jwt.sign(
@@ -20,7 +25,7 @@ const signToken = (user) => {
   );
 };
 
-const createSendToken = async (user, statusCode, res) => {
+const createSendToken = async (user, statusCode, res, extra = {}) => {
   const token = signToken(user);
 
   const cookieOptions = {
@@ -79,13 +84,19 @@ const createSendToken = async (user, statusCode, res) => {
     userResponse.permissions = user.permissions || [];
   }
 
-  res.status(statusCode).json({
+  const responseBody = {
     status: 'success',
     token,
     data: {
       user: userResponse
     }
-  });
+  };
+
+  if (extra && typeof extra === 'object' && Object.keys(extra).length > 0) {
+    Object.assign(responseBody, extra);
+  }
+
+  res.status(statusCode).json(responseBody);
 };
 
 exports.createSendToken = createSendToken;
@@ -104,6 +115,24 @@ const normalizePhone = (phone) => {
     return null;
   }
   return String(phone).trim();
+};
+
+const verifyGoogleIdToken = async (idToken) => {
+  if (!googleClient) {
+    throw new AppError('Google login is not configured on the server', 500);
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    return ticket.getPayload();
+  } catch (error) {
+    console.error('Google token verification failed:', error.message);
+    throw new AppError('Unable to verify Google authentication. Please try again.', 401);
+  }
 };
 
 const handleInvalidOtp = async ({ phone, purpose, reason }) => {
@@ -146,21 +175,58 @@ exports.updateUserPassword = async (userId, newPassword) => {
 
 const signup = async (userObj = {}) => {
   const timestamp = new Date().toISOString();
-  const email = userObj.email ? String(userObj.email).toLowerCase() : null;
-  const rawUsername = userObj.username;
+  const {
+    googleIdToken,
+    password,
+    googleId: _ignoredGoogleId,
+    emailVerified: _ignoredEmailVerified,
+    verificationStatus: _ignoredVerificationStatus,
+    authProvider: _ignoredAuthProvider,
+    promotionalEmailSentAt: _ignoredPromotionalEmailSentAt,
+    updatedAt: _ignoredUpdatedAt,
+    createdAt: _ignoredCreatedAt,
+    lastLogin: _ignoredLastLogin,
+    ...restUserFields
+  } = userObj;
+
+  const email = restUserFields.email ? String(restUserFields.email).toLowerCase() : null;
+  const rawUsername = restUserFields.username;
   const username = rawUsername ? String(rawUsername).trim() : '';
-  const fullName = userObj.fullName ? String(userObj.fullName).trim() : '';
+  const providedFullName = restUserFields.fullName ? String(restUserFields.fullName).trim() : '';
+  let fullName = providedFullName;
 
   if (!email) {
     throw new AppError('Email is required to register', 400);
   }
 
-  if (!userObj.password) {
+  if (!password) {
     throw new AppError('Password is required to register', 400);
   }
 
   if (!username) {
     throw new AppError('Username is required to register', 400);
+  }
+
+  const enforceGoogleVerification = process.env.ENFORCE_GOOGLE_SIGNUP === 'true';
+  let googleVerification = null;
+
+  if (googleIdToken) {
+    googleVerification = await verifyGoogleIdToken(googleIdToken);
+    const verifiedEmail = googleVerification?.email ? googleVerification.email.toLowerCase() : null;
+
+    if (!verifiedEmail || verifiedEmail !== email) {
+      throw new AppError('Provided email must match the verified Google account.', 400);
+    }
+
+    if (!googleVerification.email_verified) {
+      throw new AppError('Your Google email address must be verified before continuing.', 400);
+    }
+  } else if (enforceGoogleVerification) {
+    throw new AppError('Google verification is required to register with an email address.', 400);
+  }
+
+  if (googleVerification && !fullName) {
+    fullName = googleVerification.name ? String(googleVerification.name).trim() : '';
   }
 
   // Ensure email uniqueness for clearer error responses
@@ -175,22 +241,48 @@ const signup = async (userObj = {}) => {
   }
 
   // Hash the password before storing
-  const hashedPassword = await bcrypt.hash(userObj.password, 12);
+  const hashedPassword = await bcrypt.hash(password, 12);
 
   // Ensure all fields are properly captured
   const userData = {
-    ...userObj,
+    ...restUserFields,
     email,
     username,
     fullName,
-    password: hashedPassword, // Use hashed password instead of plain text
-    uploadedPhoto: userObj.uploadedPhoto || null,
-    verificationStatus: 'pending',
+    password: hashedPassword,
+    uploadedPhoto: restUserFields.uploadedPhoto || null,
+    verificationStatus: googleVerification ? 'verified' : 'pending',
     updatedAt: timestamp,
-    createdAt: timestamp
+    createdAt: timestamp,
+    googleId: googleVerification ? googleVerification.sub : undefined,
+    emailVerified: !!googleVerification,
+    authProvider: googleVerification ? 'password+google' : 'password'
   };
 
-  const newUser = await User.create(userData);
+  let newUser = await User.create(userData);
+
+  if (googleVerification) {
+    try {
+      await sendPromotionalEmail({
+        email,
+        fullName: fullName || googleVerification.name
+      });
+
+      const promoTimestamp = new Date().toISOString();
+      const updatedUser = await User.update(newUser.userId, {
+        promotionalEmailSentAt: promoTimestamp
+      });
+
+      if (updatedUser) {
+        newUser = updatedUser;
+      } else {
+        newUser.promotionalEmailSentAt = promoTimestamp;
+      }
+    } catch (error) {
+      console.error(`Promotional email send failed for new user ${newUser.userId}:`, error.message);
+    }
+  }
+
   return newUser;
 };
 
@@ -293,6 +385,110 @@ const login = async (identifier, password, isAdminLogin = false) => {
     // Re-throw the error to be caught by the catchAsync wrapper
     throw error;
   }
+};
+
+const googleLogin = async ({ idToken, sendPromotionalEmail: shouldSendPromotionalEmail = true }) => {
+  if (!idToken) {
+    throw new AppError('Google ID token is required', 400);
+  }
+
+  const payload = await verifyGoogleIdToken(idToken);
+  const googleId = payload?.sub;
+  const email = payload?.email ? String(payload.email).trim().toLowerCase() : null;
+
+  if (!googleId || !email) {
+    throw new AppError('Google account information is incomplete', 400);
+  }
+
+  if (!payload.email_verified) {
+    throw new AppError('Your Google email address must be verified before continuing.', 400);
+  }
+
+  const timestamp = new Date().toISOString();
+  let user = await User.findByGoogleId(googleId);
+  let isNewUser = false;
+
+  if (!user) {
+    user = await User.findByEmail(email);
+  }
+
+  if (user) {
+    const updates = {};
+
+    if (!user.googleId) {
+      updates.googleId = googleId;
+    }
+    if (user.email !== email) {
+      updates.email = email;
+    }
+    if (!user.emailVerified) {
+      updates.emailVerified = true;
+    }
+    if (user.verificationStatus !== 'verified') {
+      updates.verificationStatus = 'verified';
+    }
+    if (!user.fullName && payload.name) {
+      updates.fullName = payload.name;
+    }
+    if (!user.avatar && payload.picture) {
+      updates.avatar = payload.picture;
+    }
+    if (!user.authProvider || user.authProvider === 'password') {
+      updates.authProvider = 'google';
+    }
+
+    updates.lastLogin = timestamp;
+    user = await User.update(user.userId, updates);
+  } else {
+    isNewUser = true;
+    const randomPassword = crypto.randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(randomPassword, 12);
+    const userData = {
+      userId: uuidv4(),
+      email,
+      password: hashedPassword,
+      fullName: payload.name || email,
+      avatar: payload.picture,
+      googleId,
+      emailVerified: true,
+      verificationStatus: 'verified',
+      status: 'active',
+      authProvider: 'google',
+      lastLogin: timestamp
+    };
+
+    user = await User.create(userData);
+  }
+
+  let promotionalEmailSent = false;
+
+  if (shouldSendPromotionalEmail && !user.promotionalEmailSentAt) {
+    try {
+      await sendPromotionalEmail({
+        email: user.email,
+        fullName: user.fullName
+      });
+
+      const promoTimestamp = new Date().toISOString();
+      const updated = await User.update(user.userId, {
+        promotionalEmailSentAt: promoTimestamp
+      });
+
+      if (updated) {
+        user = updated;
+      } else {
+        user.promotionalEmailSentAt = promoTimestamp;
+      }
+
+      promotionalEmailSent = true;
+    } catch (error) {
+      console.error(`Promotional email send failed for user ${user.userId}:`, error.message);
+    }
+  }
+
+  user.password = undefined;
+
+  return { user, promotionalEmailSent, isNewUser };
 };
 
 const requestSignupOtp = async ({ phone, username, fullName }) => {
@@ -724,6 +920,7 @@ const updatePassword = catchAsync(async (req, res, next) => {
 module.exports = {
   signup,
   login,
+  googleLogin,
   protect,
   restrictTo,
   createSendToken,

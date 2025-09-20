@@ -105,18 +105,28 @@ const TicketModel = {
     async create(ticketData) {
         const timestamp = new Date().toISOString();
 
+        const quantity = Number(ticketData.quantity || 1);
+        const price = Number(ticketData.price || 0);
+        const totalPrice = Number(
+            ticketData.totalPrice !== undefined ? ticketData.totalPrice : price * quantity
+        );
+
         const params = {
             TableName: this.tableName,
             Item: {
                 ticketId: ticketData.ticketId,
                 eventId: ticketData.eventId,
                 userId: ticketData.userId,
+                registrationId: ticketData.registrationId || null,
                 seatNumber: ticketData.seatNumber,
-                price: ticketData.price,
+                price,
+                quantity,
+                totalPrice,
+                notes: ticketData.notes || null,
                 purchaseDate: timestamp,
                 checkInTime: null,
                 status: ticketData.status || 'active',
-                faceVerified: false,
+                faceVerified: ticketData.faceVerified === undefined ? false : Boolean(ticketData.faceVerified),
                 createdAt: timestamp,
                 updatedAt: timestamp
             }

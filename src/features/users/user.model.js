@@ -1,5 +1,14 @@
 const { initializeDynamoDB } = require('../../config/config');
 
+const cleanObject = (obj = {}) => {
+    Object.keys(obj).forEach((key) => {
+        if (obj[key] === undefined) {
+            delete obj[key];
+        }
+    });
+    return obj;
+};
+
 const UserModel = {
     tableName: 'Users',
     faceImageTableName: 'faceimage',
@@ -18,11 +27,12 @@ const UserModel = {
     // Create a new user
     async create(userData) {
         const timestamp = new Date().toISOString();
+        const normalizedEmail = userData.email ? String(userData.email).trim().toLowerCase() : null;
         const normalizedUsername = userData.username ? String(userData.username).trim() : null;
-        const item = {
+        const item = cleanObject({
             userId: userData.userId,
-            fullName: userData.fullName || userData.email,
-            email: userData.email,
+            fullName: userData.fullName || normalizedEmail,
+            email: normalizedEmail,
             password: userData.password,
             phone: userData.phone,
             phoneVerified: userData.phoneVerified === undefined ? false : userData.phoneVerified,
@@ -35,8 +45,12 @@ const UserModel = {
             lastLogin: userData.lastLogin,
             status: userData.status || 'active',
             createdAt: timestamp,
-            updatedAt: timestamp
-        };
+            updatedAt: timestamp,
+            googleId: userData.googleId,
+            emailVerified: userData.emailVerified === undefined ? false : userData.emailVerified,
+            authProvider: userData.authProvider || (userData.googleId ? 'google' : 'password'),
+            promotionalEmailSentAt: userData.promotionalEmailSentAt
+        });
 
         if (normalizedUsername) {
             item.username = normalizedUsername;
@@ -165,6 +179,28 @@ async getByEmail(email) {
         return (result.Items && result.Items.length > 0) ? result.Items[0] : null;
     },
 
+    async findByGoogleId(googleId) {
+        if (!googleId) {
+            return null;
+        }
+
+        const params = {
+            TableName: this.tableName,
+            FilterExpression: '#googleId = :googleId',
+            ExpressionAttributeNames: {
+                '#googleId': 'googleId'
+            },
+            ExpressionAttributeValues: {
+                ':googleId': googleId
+            },
+            Limit: 1
+        };
+
+        const { documentClient } = await initializeDynamoDB();
+        const result = await documentClient.scan(params).promise();
+        return (result.Items && result.Items.length > 0) ? result.Items[0] : null;
+    },
+
     // Update user
     async update(userId, updateData) {
         const timestamp = new Date().toISOString();
@@ -173,6 +209,11 @@ async getByEmail(email) {
             ':updatedAt': timestamp
         };
         const ExpressionAttributeNames = {};
+
+        // Maintain normalized values when updating
+        if (updateData.email) {
+            updateData.email = String(updateData.email).trim().toLowerCase();
+        }
 
         // Maintain usernameLower when username changes
         if (updateData.username) {
@@ -185,9 +226,11 @@ async getByEmail(email) {
         Object.keys(updateData).forEach((key) => {
             // Prevent updating primary key and avoid duplicating updatedAt which we always set above
             if (key === 'userId' || key === 'updatedAt') return;
+            const value = updateData[key];
+            if (value === undefined) return;
             UpdateExpression += `, #key${i} = :value${i}`;
             ExpressionAttributeNames[`#key${i}`] = key;
-            ExpressionAttributeValues[`:value${i}`] = updateData[key];
+            ExpressionAttributeValues[`:value${i}`] = value;
             i += 1;
         });
 
@@ -286,10 +329,19 @@ async getByEmail(email) {
 
     // Update verification status
     async updateVerificationStatus(userId, status) {
-        return this.update(userId, {
+        const updatedUser = await this.update(userId, {
             verificationStatus: status,
             updatedAt: new Date().toISOString()
         });
+        if (status === 'verified') {
+            try {
+                const { issuePendingTicketsForUser } = require('../tickets/ticket.service');
+                await issuePendingTicketsForUser(userId);
+            } catch (error) {
+                console.error(`Failed to issue pending tickets for user ${userId}:`, error);
+            }
+        }
+        return updatedUser;
     },
     
     // Get face RekognitionId for a user from faceimage table

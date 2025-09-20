@@ -1,6 +1,7 @@
 const Ticket = require('./ticket.model');
 const Event = require('../events/event.model');
 const User = require('../users/user.model');
+const UserEventRegistration = require('../registrations/userEventRegistration.model');
 const AppError = require('../../shared/utils/appError');
 const catchAsync = require('../../shared/utils/catchAsync');
 
@@ -60,7 +61,13 @@ exports.getTicket = catchAsync(async (req, res, next) => {
 });
 
 exports.createTicket = catchAsync(async (req, res, next) => {
-  // Verify event and user exist
+  const quantityRaw = req.body.quantity ?? 1;
+  const quantity = Number(quantityRaw);
+
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return next(new AppError('Quantity must be a positive whole number', 400));
+  }
+
   const [event, user] = await Promise.all([
     Event.get(req.body.eventId),
     User.getUserById(req.body.userId)
@@ -74,19 +81,70 @@ exports.createTicket = catchAsync(async (req, res, next) => {
     return next(new AppError('User not found', 404));
   }
 
-  // Generate unique ticket ID
+  const totalTickets = Number(event.totalTickets || 0);
+  const ticketsSold = Number(event.ticketsSold || 0);
+  const hasCapacityLimit = totalTickets > 0;
+
+  if (hasCapacityLimit && ticketsSold + quantity > totalTickets) {
+    return next(new AppError('Not enough tickets available for this event', 400));
+  }
+
+  const unitPrice = Number(
+    req.body.price !== undefined ? req.body.price : event.ticketPrice || 0
+  );
+  const totalPrice = unitPrice * quantity;
+
+  const hasFaceData = await User.hasFaceImageForUser(user.userId);
+  const isUserVerified = !user.verificationStatus || user.verificationStatus === 'verified';
+  const shouldQueueRequest = !hasFaceData || !isUserVerified;
+
+  if (shouldQueueRequest) {
+    const registration = await UserEventRegistration.recordTicketRequest({
+      userId: user.userId,
+      eventId: event.eventId,
+      quantity,
+      unitPrice,
+      totalPrice,
+      notes: req.body.notes,
+      source: 'ticket_purchase_pending_verification'
+    });
+
+    return res.status(202).json({
+      status: 'pending_verification',
+      message: 'Face verification pending. Ticket request has been queued and will be issued once verification is approved.',
+      data: {
+        registration
+      }
+    });
+  }
+
   const ticketId = `tkt_${Date.now()}`;
   const ticketData = {
-    ...req.body,
     ticketId,
-    status: 'active',
-    faceVerified: false
+    eventId: event.eventId,
+    userId: user.userId,
+    seatNumber: req.body.seatNumber,
+    price: unitPrice,
+    totalPrice,
+    quantity,
+    notes: req.body.notes,
+    status: 'active'
   };
 
   const newTicket = await Ticket.create(ticketData);
 
-  // Return ticket with event and user details
-  const ticketWithDetails = { ...newTicket, event, user };
+  const updatedEvent = await Event.update(event.eventId, {
+    ticketsSold: ticketsSold + quantity
+  });
+
+  const ticketWithDetails = {
+    ...newTicket,
+    event: updatedEvent,
+    user: {
+      ...user,
+      faceId: hasFaceData
+    }
+  };
 
   res.status(201).json({
     status: 'success',

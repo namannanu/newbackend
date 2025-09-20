@@ -13,6 +13,7 @@ router.post('/register', authController.signup);
 router.post('/phone/signup/request-otp', authController.requestSignupOtp);
 router.post('/phone/signup/verify-otp', authController.verifySignupOtp);
 router.post('/login', authController.login);
+router.post('/google/login', authController.googleLogin);
 router.post('/phone/login/request-otp', authController.requestPhoneLoginOtp);
 router.post('/phone/login/verify-otp', authController.verifyPhoneLoginOtp);
 router.post('/admin-login', authController.adminLogin);
@@ -40,5 +41,4 @@ router.get('/profile', userController.getMyProfile);
 router.patch('/updateMyPassword', authController.updatePassword);
 
 module.exports = router;
-
 

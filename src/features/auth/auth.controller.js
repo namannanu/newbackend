@@ -39,6 +39,20 @@ exports.adminLogin = catchAsync(async (req, res, next) => {
   await createSendToken(user, 200, res);
 });
 
+exports.googleLogin = catchAsync(async (req, res, next) => {
+  const { idToken, sendPromotionalEmail } = req.body;
+  const { user, promotionalEmailSent, isNewUser } = await authService.googleLogin({
+    idToken,
+    sendPromotionalEmail
+  });
+
+  const statusCode = isNewUser ? 201 : 200;
+  await createSendToken(user, statusCode, res, {
+    promotionalEmailSent,
+    isNewUser
+  });
+});
+
 exports.requestPhoneLoginOtp = catchAsync(async (req, res, next) => {
   const { phone } = req.body;
   const result = await authService.requestPhoneLoginOtp({ phone });

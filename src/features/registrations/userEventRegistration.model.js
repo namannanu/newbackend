@@ -211,6 +211,16 @@ const UserEventRegistrationModel = {
         const timestamp = buildTimestamp();
         const registrationId = registrationData.registrationId || `reg_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
+        const requestedQuantity = typeof registrationData.requestedQuantity === 'number'
+            ? registrationData.requestedQuantity
+            : (registrationData.quantity || 1);
+        const unitPrice = typeof registrationData.unitPrice === 'number'
+            ? registrationData.unitPrice
+            : (registrationData.price !== undefined ? registrationData.price : undefined);
+        const totalPrice = typeof registrationData.totalPrice === 'number'
+            ? registrationData.totalPrice
+            : (unitPrice !== undefined ? unitPrice * requestedQuantity : undefined);
+
         const item = sanitizeItem({
             registrationId,
             eventId: registrationData.eventId,
@@ -228,6 +238,11 @@ const UserEventRegistrationModel = {
             adminBooked: Boolean(registrationData.adminBooked),
             adminOverrideReason: registrationData.adminOverrideReason || null,
             ticketId: registrationData.ticketId || null,
+            requestedQuantity,
+            unitPrice,
+            totalPrice,
+            notes: registrationData.notes || null,
+            ticketRequestSource: registrationData.ticketRequestSource || null,
             createdAt: timestamp,
             updatedAt: timestamp
         });
@@ -366,6 +381,61 @@ const UserEventRegistrationModel = {
     async countDocuments(filter = {}) {
         const items = await this.find(filter);
         return items.length;
+    },
+
+    async recordTicketRequest({
+        userId,
+        eventId,
+        quantity = 1,
+        unitPrice,
+        totalPrice,
+        notes,
+        source
+    }) {
+        if (!userId || !eventId) {
+            throw new Error('userId and eventId are required to record a ticket request');
+        }
+
+        const normalizedQuantity = Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
+        const normalizedUnitPrice = unitPrice !== undefined ? Number(unitPrice) : undefined;
+        const normalizedTotalPrice = totalPrice !== undefined
+            ? Number(totalPrice)
+            : (normalizedUnitPrice !== undefined ? normalizedUnitPrice * normalizedQuantity : undefined);
+
+        const existingRegistrations = await this.find({ eventId, userId });
+        const existing = existingRegistrations.find(
+            (registration) => registration && !registration.ticketIssued && registration.status === 'pending'
+        );
+
+        const updatePayload = {
+            requestedQuantity: normalizedQuantity,
+            unitPrice: normalizedUnitPrice,
+            totalPrice: normalizedTotalPrice,
+            notes: notes || null,
+            ticketRequestSource: source || 'ticket_purchase',
+            status: 'pending',
+            waitingStatus: 'queued',
+            faceVerificationStatus: 'pending',
+            ticketAvailabilityStatus: 'pending'
+        };
+
+        if (existing) {
+            return this.findByIdAndUpdate(existing.registrationId, updatePayload);
+        }
+
+        return this.create({
+            userId,
+            eventId,
+            requestedQuantity: normalizedQuantity,
+            unitPrice: normalizedUnitPrice,
+            totalPrice: normalizedTotalPrice,
+            notes: notes || null,
+            ticketRequestSource: source || 'ticket_purchase',
+            status: 'pending',
+            waitingStatus: 'queued',
+            faceVerificationStatus: 'pending',
+            ticketAvailabilityStatus: 'pending'
+        });
     },
 
     // Get registrations by event
