@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const colors = require('colors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
@@ -36,6 +37,47 @@ if (!envLoaded) {
     console.warn('⚠️ No env file found; relying on process environment variables.');
 }
 
+// Configure CORS first - before any other middleware
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) {
+            return callback(null, true);
+        }
+        
+        // Allow all localhost origins and vercel deployments
+        if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+        }
+        
+        // For debugging - allow all origins in development
+        if (process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+        
+        callback(null, true); // Allow all origins for now
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+        'Origin',
+        'X-Requested-With',
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'Cache-Control',
+        'X-CSRF-Token'
+    ],
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
 // Serve static files (if any)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -64,6 +106,13 @@ const userRoutes = require('./features/users/user.routes');
 const authRoutes = require('./features/auth/auth.routes');
 const awsDiagRoutes = require('./features/aws/routes/diag.routes');
 const amplifyRoutes = require('./features/aws/routes/amplify');
+
+// Add explicit OPTIONS handlers for critical endpoints
+app.options('/api/health', cors(corsOptions));
+app.options('/api/auth/*', cors(corsOptions));
+app.options('/api/admin/*', cors(corsOptions));
+app.options('/api/users/*', cors(corsOptions));
+app.options('/api/events/*', cors(corsOptions));
 
 // Root route - Vercel status
 app.get('/', (req, res) => {
